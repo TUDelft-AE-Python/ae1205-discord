@@ -44,19 +44,24 @@ class Queue(commands.Cog):
             if cv is None:
                 await ctx.send(f'<@{ctx.author.id}>: Please select a voice channel first where you want to interview the student!')
                 return
+            if not queue:
+                await ctx.send(f'<@{ctx.author.id}>: Hurray, the queue is empty!')
+                return
+
             # Get the next student in the queue
-            count = len(queue) - 1
+            count = len(queue)
             member = await ctx.guild.fetch_member(queue.pop(0))
-            while not getvoicechan(member) and count > 0:
+            while count > 0 and not getvoicechan(member):
+                count -= 1
                 await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!' 
                              'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
                 # Put the student back in the queue, and get the next one to try
                 queue.insert(10, member.id)
-                count -= 1
-
-            if count == 0:
-                await ctx.send(f'< @{ctx.author.id} > : There\'s noone in the queue who is ready (in a voice lounge)!')
-                return
+                if count:
+                    member = await ctx.guild.fetch_member(queue.pop(0))
+                else:
+                    await ctx.send(f'<@{ctx.author.id}> : There\'s noone in the queue who is ready (in a voice lounge)!')
+                    return
 
             # move the student to the callee's voice channel
             await member.edit(voice_channel=cv)
