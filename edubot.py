@@ -1,7 +1,8 @@
 import os
 import discord
 from discord.ext import commands
-from cogs import QueueCog
+from cogs import QueueCog, Poll
+
 
 class EduBot(commands.Bot):
     ''' Discord bot for educational purposes.
@@ -15,6 +16,7 @@ class EduBot(commands.Bot):
         super().__init__(command_prefix='!', case_insensitive=True)
         self.classrooms = dict()
         self.add_cog(QueueCog(self))
+        self.add_cog(Poll(self))
 
     async def on_ready(self):
         ''' Bot initialisation upon connecting to Discord. '''
