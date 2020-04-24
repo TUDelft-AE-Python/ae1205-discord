@@ -1,0 +1,1 @@
+from cogs.queue import Queue
