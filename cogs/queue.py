@@ -22,6 +22,7 @@ class Queue(commands.Cog):
         if queue is None:
             return 'This channel doesn\'t have a queue!'
         else:
+            print('ADD:', queue)
             try:
                 pos = queue.index(member.id)
                 return f'You are already in the queue <@{member.id}>! ' + \
@@ -33,7 +34,7 @@ class Queue(commands.Cog):
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def takenext(self, ctx, *, member: discord.Member = None):
+    async def takenext(self, ctx):
         """ Take the next in line from the queue. """
         queue = self.queues.get((ctx.guild.name, ctx.channel.id), None)
         if queue is None:
@@ -47,7 +48,7 @@ class Queue(commands.Cog):
             if not queue:
                 await ctx.send(f'<@{ctx.author.id}>: Hurray, the queue is empty!')
                 return
-
+            print(queue)
             # Get the next student in the queue
             count = len(queue)
             member = await ctx.guild.fetch_member(queue.pop(0))
@@ -80,7 +81,7 @@ class Queue(commands.Cog):
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def makequeue(self, ctx, *, member: discord.Member = None):
+    async def makequeue(self, ctx):
         """ Make a queue in this channel. """
         qid = (ctx.guild.name, ctx.channel.id)
         if qid in self.queues:
@@ -90,13 +91,13 @@ class Queue(commands.Cog):
             await ctx.send(f'Created a queue for channel <#{ctx.channel.id}>')
 
     @commands.command()
-    async def queueme(self, ctx, *, member: discord.Member = None):
+    async def queueme(self, ctx):
         """ Add me to the queue in this channel """
         qid = (ctx.guild.name, ctx.channel.id)
         await ctx.send(self._add(qid, ctx.author))
 
     @commands.command()
-    async def whereami(self, ctx, *, member: discord.Member = None):
+    async def whereami(self, ctx):
         """ What's my position in the queue of this channel. """
         uid = ctx.author.id
         queue = self.queues.get((ctx.guild.name, ctx.channel.id), None)
