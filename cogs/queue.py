@@ -16,6 +16,11 @@ class Queue:
     queues = dict()
 
     @classmethod
+    def saveall(cls):
+        for queue in cls.queues.values():
+            queue.save()
+
+    @classmethod
     async def qcheck(cls, ctx, qtype=None):
         queue = Queue.queues.get((ctx.guild.id, ctx.channel.id), None)
         if queue is None:
@@ -69,7 +74,7 @@ class Queue:
 
     def save(self):
         with open(f'{self.qid[0]}-{self.qid[1]}.csv', 'w') as fout:
-            fout.write(self.qtype)
+            fout.write(self.qtype + '\n')
             self.tofile(self, fout)
 
     async def takenext(self, ctx):
@@ -179,7 +184,8 @@ class QueueCog(commands.Cog):
         Queue.bot = bot
 
     def cog_unload(self):
-        # Save queues here
+        # Save all queues upon exit
+        Queue.saveall()
         return super().cog_unload()
 
     @commands.command()
