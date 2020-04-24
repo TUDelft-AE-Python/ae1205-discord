@@ -1,1 +1,1 @@
-from cogs.queue import Queue
+from cogs.queue import QueueCog
