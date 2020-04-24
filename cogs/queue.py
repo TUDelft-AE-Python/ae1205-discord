@@ -15,6 +15,7 @@ class Queue(commands.Cog):
         self.bot = bot
         self._last_member = None
         self.queues = dict()
+        self.assigned = dict()
 
     def _add(self, qid, member):
         ''' Internal function to add someone to a queue. '''
@@ -22,7 +23,6 @@ class Queue(commands.Cog):
         if queue is None:
             return 'This channel doesn\'t have a queue!'
         else:
-            print('ADD:', queue)
             try:
                 pos = queue.index(member.id)
                 return f'You are already in the queue <@{member.id}>! ' + \
@@ -36,11 +36,12 @@ class Queue(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def takenext(self, ctx):
         """ Take the next in line from the queue. """
-        queue = self.queues.get((ctx.guild.name, ctx.channel.id), None)
+        qid = (ctx.guild.name, ctx.channel.id)
+        queue = self.queues.get(qid, None)
         if queue is None:
             await ctx.send('This channel doesn\'t have a queue!')
         else:
-            # Get the voice channel of the callee
+            # Get the voice channel of the caller
             cv = getvoicechan(ctx.author)
             if cv is None:
                 await ctx.send(f'<@{ctx.author.id}>: Please select a voice channel first where you want to interview the student!')
@@ -48,7 +49,7 @@ class Queue(commands.Cog):
             if not queue:
                 await ctx.send(f'<@{ctx.author.id}>: Hurray, the queue is empty!')
                 return
-            print(queue)
+
             # Get the next student in the queue
             count = len(queue)
             member = await ctx.guild.fetch_member(queue.pop(0))
@@ -64,8 +65,11 @@ class Queue(commands.Cog):
                     await ctx.send(f'<@{ctx.author.id}> : There\'s noone in the queue who is ready (in a voice lounge)!')
                     return
 
-            # move the student to the callee's voice channel
+            # move the student to the callee's voice channel, and store him/her
+            # as assigned for the caller
+            self.assigned[ctx.author.id] = (member.id, qid, getvoicechan(member))
             await member.edit(voice_channel=cv)
+
             # are there still students in the queue?
             if queue:
                 member = await ctx.guild.fetch_member(queue[0])
@@ -78,6 +82,19 @@ class Queue(commands.Cog):
                     await self.bot.dm(member,
                         f'Almost there {member.name}, You\'re second in line for the queue in <#{ctx.channel.id}>!' +
                         ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def putback(self, ctx):
+        ''' Put the student you currently have in your voice channel back in the queue. '''
+        uid, qid, voicechan = self.assigned.get(ctx.author.id, (False, False, False))
+        if not uid:
+            await ctx.send(f'<@{ctx.author.id}>: You don\'t have a student assigned to you yet!')
+        else:
+            self.queues[qid].insert(10, uid)
+            member = await ctx.guild.fetch_member(uid)
+            await member.edit(voice_channel=voicechan)
+            await self.bot.dm(member, 'You were moved back into the queue, probably because you didn\'t respond.')
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -113,7 +130,9 @@ class Queue(commands.Cog):
                 await ctx.send(f'You are not in the queue in this channel <@{uid}>!')
 
     @commands.command()
+    @commands.has_permissions(administrator=True)
     async def queue(self, ctx, *, member: discord.Member = None):
+        """ Admin command: check and add to the queue. """
         qid = (ctx.guild.name, ctx.channel.id)
         if member is None:
             # Only respond with the length of the queue
