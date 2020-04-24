@@ -197,7 +197,7 @@ class Poll(commands.Cog):
         feedback_chart = quiz_to_finish.create_histogram()
 
         # Send the feedback chart to the person who created the quiz and the person who ended it
-        for user_id in (author_id, quiz_to_finish.owner):
+        for user_id in set((author_id, quiz_to_finish.owner)):
             await message_channel.guid.get_member(user_id).send("Feedback graph for {}!".format(quiz_to_finish.name),
                                                                 file=discord.File(feedback_chart))
         # Remove the quiz from the internal dictionary
