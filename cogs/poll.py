@@ -1,21 +1,27 @@
 import discord
 from discord.ext import commands
 import json
-import emoji # Library used for handling emoji codes
+import emoji                                    # Library used for handling emoji codes
 import matplotlib.pyplot as plt
 from matplotlib.ticker import PercentFormatter
 import numpy as np
-import io # For generating discord .png
-import os # For checking if quiz file exists
+import io                                       # For generating discord .png
+import os                                       # For checking if quiz file exists
 
 # Define a shorthand for obtaining the emoji belonging to a :emoji: string
 get_emoji = lambda em: emoji.emojize(em, use_aliases=True)
 
 
-# Global settings for quizzes
+# Global settings for quizzes (This path must be relative to the main file, i.e. edubot.py)
 quiz_directory = "./cogs/quizzes/"
 
 class Quiz:
+
+    """
+    Class used to store all details related to a quiz: answers, question, votes and correct answer.
+    Also contains information about the quiz message and creator for use by the Discord API
+    """
+
     def __init__(self,name,json_file, owner):
         self.name = name
         self.filename = json_file
@@ -36,6 +42,9 @@ class Quiz:
                               (":one:",":two:",":three:",":four:",":five:",":six:",":seven:",":eight:",":nine:")]
 
     def load_data(self):
+
+        '''Function for loading in json files containing the quiz information'''
+
         with open(self.filename, "r") as file:
             json_data = json.load(file)
 
@@ -45,6 +54,9 @@ class Quiz:
         self.votes = {i+1: [] for i in range(len(self.options))}
 
     def generate_quiz_message(self):
+
+        '''Function for generating all required parameters for a Discord message Embed to represent the quiz'''
+
         title = self.name
         question = self.question
 
@@ -59,6 +71,9 @@ class Quiz:
         return title, description, emojis
 
     def vote(self, voter_id, emoji):
+
+        '''Function that handles user votes to the quiz and makes sure each user only has one final vote'''
+
         # If it's an invalid emoji, just return
         if not emoji in self.emoji_options:
             return
@@ -72,6 +87,11 @@ class Quiz:
 
 
     def create_histogram(self):
+
+        """
+        Function that creates a histogram to serve as quiz feedback, shows percentual distribution of votes.
+        Returns a BytesIO() object that serves as an image file to pass into a Discord message.
+        """
 
         # Create a BytesIO buffer to temporarily store the image
         image_buffer = io.BytesIO()
@@ -131,6 +151,8 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def create_quiz(self,ctx,*args):
 
+        '''Discord command to create a Quiz object and represent it in Discord'''
+
         # Save the channel in which the message was sent
         quiz_channel = ctx.channel
         # Save the creator's id to privately send feedback after the quiz is finished
@@ -188,6 +210,13 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def finish_quiz(self,ctx,*args):
+
+        """
+        Discord command to end a quiz and publish its results using the Quiz create_histogram function.
+        It sends the histogram to the channel where the quiz resides as well as the people who started
+        and ended the quiz.
+        """
+
         # Save the author and channel for future reference
         author_id = ctx.author.id
         message_channel = ctx.channel
@@ -224,6 +253,9 @@ class Poll(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self,ctx):
+
+        '''A Discord event listener that is triggered each time a reaction is added to a message.'''
+
         message_id = ctx.message_id
         if not message_id in self.quizzes or ctx.user_id == self.bot.user.id:
             return
