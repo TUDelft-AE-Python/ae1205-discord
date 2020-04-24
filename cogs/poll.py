@@ -13,7 +13,7 @@ get_emoji = lambda em: emoji.emojize(em, use_aliases=True)
 
 
 # Global settings for quizzes
-quiz_directory = "./quizzes/"
+quiz_directory = "./cogs/quizzes/"
 
 class Quiz:
     def __init__(self,name,json_file, owner):
@@ -22,6 +22,7 @@ class Quiz:
         self.owner = owner
 
         self.message_id = None
+        self.channel_id = None
 
         self.question = ""
         self.correct_answer = 0
@@ -39,9 +40,9 @@ class Quiz:
             json_data = json.load(file)
 
         self.question = json_data["question"]
-        self.options = {i: option for i,option in enumerate(json_data["options"])}
+        self.options = {i+1: option for i,option in enumerate(json_data["options"])}
         self.correct_answer = json_data["correct"]
-        self.votes = {i: 0 for i in range(len(self.options))}
+        self.votes = {i+1: [] for i in range(len(self.options))}
 
     def generate_quiz_message(self):
         title = self.name
@@ -98,6 +99,11 @@ class Quiz:
         plt.gca().yaxis.set_major_formatter(PercentFormatter(1))
         plt.grid(axis='y')
         plt.xticks([i for i in range(1, len(self.options) + 1)])
+
+        # Configure axis labels and title
+        plt.title(self.name)
+        plt.xlabel("Answers")
+        plt.ylabel("Votes")
 
 
         # Save figure to image buffer
@@ -160,8 +166,7 @@ class Poll(commands.Cog):
             return
 
         # Create the new quiz
-        new_quiz = Quiz(quiz_name,quiz_filename,quiz_creator)
-        self.quizzes.append(new_quiz)
+        new_quiz = Quiz(quiz_name,quiz_directory+quiz_filename,quiz_creator)
 
         # Create the message belonging to the quiz and give it a nice green coloured embed
         title, description, emojis = new_quiz.generate_quiz_message()
@@ -170,6 +175,14 @@ class Poll(commands.Cog):
 
         # Now attach this new message's id to the new quiz
         new_quiz.message_id = new_message.id
+        new_quiz.channel_id = new_message.channel.id
+
+        # Add the quiz to the internal dict
+        self.quizzes[new_quiz.message_id] = new_quiz
+
+        # Add the appropriate reactions
+        for em in emojis:
+            await new_message.add_reaction(em)
 
     @commands.command("finishquiz", aliases=("finish-quiz", "finish_quiz", "endquiz","end_quiz","end-quiz"))
     @commands.has_permissions(administrator=True)
@@ -184,7 +197,7 @@ class Poll(commands.Cog):
 
         quiz_name = " ".join(args)
         try:
-            quiz_to_finish = self.quizzes[quiz_name]
+            quiz_to_finish = self.quizzes[list(filter(lambda k: self.quizzes[k].name, self.quizzes))[0]]
         except Exception:
             await ctx.channel.send(
                 "<@{}> That quiz does not exist, please check the spelling of the name you provided!".format(
@@ -196,17 +209,23 @@ class Poll(commands.Cog):
 
         feedback_chart = quiz_to_finish.create_histogram()
 
+        # Send the feedback chart to the channel where the quiz is located
+        await self.bot.get_channel(quiz_to_finish.channel_id).send("Feedback graph for {}!".format(quiz_to_finish.name),
+                                                                   file=discord.File(feedback_chart))
+
         # Send the feedback chart to the person who created the quiz and the person who ended it
-        for user_id in set((author_id, quiz_to_finish.owner)):
-            await message_channel.guid.get_member(user_id).send("Feedback graph for {}!".format(quiz_to_finish.name),
-                                                                file=discord.File(feedback_chart))
+        for user_id in {author_id, quiz_to_finish.owner}:
+            # Reset the buffer internal index to 0 again
+            feedback_chart.seek(0)
+            await message_channel.guild.get_member(user_id).send("Feedback graph for {}!".format(quiz_to_finish.name),
+                                                                 file=discord.File(feedback_chart))
         # Remove the quiz from the internal dictionary
-        self.quizzes.pop(quiz_name)
+        self.quizzes.pop(quiz_to_finish.message_id)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self,ctx):
         message_id = ctx.message_id
-        if not message_id in self.quizzes:
+        if not message_id in self.quizzes or ctx.user_id == self.bot.user.id:
             return
         # The RawReactionEvent object only contains id's, so these need to be converted to usable
         # discord Channel, Message and Member objects in order to delete the received reaction
@@ -217,6 +236,7 @@ class Poll(commands.Cog):
 
         # Call the vote command. If an invalid emoji has been used, this will do nothing
         self.quizzes[message_id].vote(reaction_member.id, str(ctx.emoji))
+
 
 
 
