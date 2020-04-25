@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from collections import OrderedDict
 
 
 def getvoicechan(member):
@@ -12,47 +13,60 @@ def getvoicechan(member):
 class Queue:
     # Get reference to bot in a static
     bot = None
+    datadir = None
     # Keep queues in a static dict
     queues = dict()
 
     @classmethod
     def saveall(cls):
-        for queue in cls.queues.values():
+        print('Saving all queues')
+        for qid, queue in cls.queues.items():
+            print('Saving queue', qid)
             queue.save()
 
     @classmethod
-    async def qcheck(cls, ctx, qtype=None):
+    def loadall(cls):
+        msgs = []
+        for qfile in cls.datadir.iterdir():
+            qidstr = qfile.name.replace('.dat', '').split('-')
+            qid = tuple(int(i) for i in qidstr)
+            msgs.append(cls.load(qid))
+        return '\n'.join(msgs)
+
+    @classmethod
+    async def qcheck(cls, ctx, qtype=''):
         queue = Queue.queues.get((ctx.guild.id, ctx.channel.id), None)
         if queue is None:
-            ctx.send('This channel doesn\'t have a queue!')
+            await ctx.send('This channel doesn\'t have a queue!')
             return False
-        if isinstance(queue, qtype or cls):
+        if not qtype or qtype == queue.qtype:
             return True
-        ctx.send(f'{ctx.invoked_with} is not a recognised command for the queue in this channel!')
+        await ctx.send(f'{ctx.invoked_with} is not a recognised command for the queue in this channel!')
         return False
 
-    @staticmethod
-    def makequeue(qid, qtype):
-        if qid in Queue.queues:
+    @classmethod
+    def makequeue(cls, qid, qtype):
+        if qid in cls.queues:
             return 'This channel already has a queue!'
         else:
             # Get the correct subclass of Queue
-            qclass = next(qclass for qclass in Queue.__subclasses__() if qclass.qtype == qtype)
-            Queue.queues[qid] = qclass(qid)
+            qclass = next(qclass for qclass in cls.__subclasses__() if qclass.qtype == qtype)
+            cls.queues[qid] = qclass(qid)
             return f'Created a {qtype} queue'
 
-    @staticmethod
-    def addtoqueue(qid, *args):
-        return Queue.queues[qid].add(*args)
+    @classmethod
+    def addtoqueue(cls, qid, *args):
+        return cls.queues[qid].add(*args)
 
-    @staticmethod
-    def load(qid):
+    @classmethod
+    def load(cls, qid):
         try:
-            with open(f'{qid[0]}-{qid[1]}.csv', 'r') as fin:
-                qtype = fin.readline()
-                Queue.makequeue(qid, qtype)
-                Queue.queues[qid].fromfile(fin)
-                return f'Loaded a {qtype} queue for <#{qid[1]}> with {len(queue)} entries.'
+            fname = cls.datadir.joinpath(f'{qid[0]}-{qid[1]}.dat')
+            with open(fname, 'r') as fin:
+                qtype = fin.readline().strip()
+                cls.makequeue(qid, qtype)
+                cls.queues[qid].fromfile(fin)
+                return f'Loaded a {qtype} queue for <#{qid[1]}> with {cls.queues[qid].size()} entries.'
         except IOError:
             return 'No saved queue available for this channel.'
 
@@ -73,15 +87,11 @@ class Queue:
         pass
 
     def save(self):
-        with open(f'{self.qid[0]}-{self.qid[1]}.csv', 'w') as fout:
+        fname = Queue.datadir.joinpath(f'{self.qid[0]}-{self.qid[1]}.dat')
+        print('Saving', fname)
+        with open(fname, 'w') as fout:
             fout.write(self.qtype + '\n')
-            self.tofile(self, fout)
-
-    async def takenext(self, ctx):
-        pass
-
-    async def putback(self, ctx):
-        pass
+            self.tofile(fout)
 
     def whereis(self, uid):
         pass
@@ -98,17 +108,18 @@ class ReviewQueue(Queue):
         self.queue = [int(el) for el in fin.read().strip().split(',')]
 
     def tofile(self, fout):
-        fout.write(','.join([str(el) for el in queue]))
+        out = ','.join([str(el) for el in self.queue])
+        fout.write(out)
 
     def add(self, member):
         try:
-            pos = self.queue.index(member.id)
-            return f'You are already in the queue <@{member.id}>! ' + \
+            pos = self.queue.index(member)
+            return f'You are already in the queue <@{member}>! ' + \
                 (f'There are still {pos} people waiting in front of you.' if pos else
                     'You are next in line!')
         except ValueError:
-            self.queue.append(member.id)
-            return f'Added <@{member.id}> to the queue at position {len(self.queue)}'
+            self.queue.append(member)
+            return f'Added <@{member}> to the queue at position {len(self.queue)}'
         self.queue.append(member)
 
     async def takenext(self, ctx):
@@ -177,19 +188,112 @@ class ReviewQueue(Queue):
             return f'You are not in the queue in this channel <@{uid}>!'
 
 
+class QuestionQueue(Queue):
+    qtype = 'Question'
+
+    class Question:
+        def __init__(self, askedby, qmsg):
+            self.qmsg = qmsg
+            self.followers = [askedby]
+
+    def __init__(self, qid):
+        super().__init__(qid)
+        self.queue = OrderedDict()
+
+    def fromfile(self, fin):
+        data = [line.strip() for line in fin.readlines()]
+        qmsgs, qfoll = data[::2], data[1::2]
+        for idx, (qmsg, qf) in enumerate(zip(qmsgs, qfoll[:len(qmsgs)])):
+            question = QuestionQueue.Question(0, qmsg)
+            question.followers = [int(f) for f in qf.strip().split()]
+            self.queue[idx+1] = question
+
+    def tofile(self, fout):
+        for qstn in self.queue.values():
+            fout.write(qstn.qmsg + '\n')
+            fout.write(' '.join([str(f) for f in qstn.followers]) + '\n')
+
+    def follow(self, member, idx=None):
+        """ Follow a question. """
+        if not self.queue:
+            return 'There are no questions in the queue!'
+        if idx is None:
+            msg = 'The following questions can be followed:\n'
+            for qidx, qstn in self.queue.items():
+                msg = msg + f'{qidx:02d}: {qstn.qmsg}' + \
+                    ' (already following)\n' if member in qstn.followers else '\n'
+            return msg
+
+        question = self.queue.get(idx, None)
+        if question is None:
+            return f'No question in the queue with index {idx}'
+        if member in question.followers:
+            return f'You are already following question {idx} <@{member}>!'
+        question.followers.append(member)
+        return f'You are now following question {idx} <@{member}>!'
+
+    def add(self, askedby, qmsg):
+        idx = next(reversed(self.queue), 0) + 1
+        self.queue[idx] = QuestionQueue.Question(askedby, qmsg)
+        return f'<@{askedby}>: Your question is added at position {len(self.queue)} with index {idx}'
+
+    async def answer(self, ctx, idx, answer=None):
+        if idx not in self.queue:
+            await ctx.send(f'<@{ctx.author.id}>: No question in the queue with index {idx}!')
+        
+        elif answer:
+            # This is a text-based answer
+            qstn = self.queue.pop(idx)
+            msg = f'Question {idx} has been answered ' + \
+                ', '.join([f'<@{uid}>' for uid in qstn.followers]) + '!\n\n' + \
+                    'Question: ' + qstn.qmsg + '\n' + 'Answer: ' + answer
+            await ctx.send(msg)
+        else:
+            # The question will be answered in a voice chat
+            cv = getvoicechan(ctx.author)
+            if cv is None:
+                await ctx.send(f'<@{ctx.author.id}>: Please select a voice channel first where you want to interview the student!')
+                return
+
+            qstn = self.queue.pop(idx)
+            msg = f'Question {idx} will be answered in voice channel <#{cv.id}> by <@{ctx.author.id}> for ' + \
+                ', '.join([f'<@{uid}>' for uid in qstn.followers]) + '!\n'
+            await ctx.send(msg)
+
+    def whereis(self, uid):
+        qlst = []
+        for pos, (idx, qstn) in enumerate(self.queue.items()):
+            if uid in qstn.followers:
+                if qstn.followers[0] == uid:
+                    qlst.append(f'Your own question ({idx}) at position {pos}')
+                else:
+                    qlst.append(f'Question {idx} at position {pos}')
+        if not qlst:
+            return f'You are not following questions in this channel <@{uid}>!'
+        return f'Questions followed by <@{uid}>:\n' + '\n'.join(qlst) 
+
 class QueueCog(commands.Cog):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
         Queue.bot = bot
+        Queue.datadir = bot.datadir.joinpath('queues')
+        if not Queue.datadir.exists():
+            Queue.datadir.mkdir()
 
     def cog_unload(self):
         # Save all queues upon exit
+        print('Unloading QueueCog')
         Queue.saveall()
         return super().cog_unload()
 
     @commands.command()
-    @commands.check(Queue.qcheck)
+    @commands.has_permissions(administrator=True)
+    async def loadallqueues(self, ctx):
+        await ctx.send(Queue.loadall())
+
+    @commands.command()
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def takenext(self, ctx):
         """ Take the next in line from the queue. """
@@ -197,7 +301,7 @@ class QueueCog(commands.Cog):
         await self.queues[qid].takenext(ctx)
 
     @commands.command()
-    @commands.check(Queue.qcheck)
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def putback(self, ctx):
         ''' Put the student you currently have in your voice channel back in the queue. '''
@@ -223,11 +327,32 @@ class QueueCog(commands.Cog):
         await ctx.send(Queue.load((ctx.guild.id, ctx.channel.id)))
 
     @commands.command(aliases=('ready', 'done'))
-    @commands.check(lambda ctx: Queue.qcheck(ctx, ReviewQueue))
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     async def queueme(self, ctx, *args):
         """ Add me to the queue in this channel """
         qid = (ctx.guild.id, ctx.channel.id)
-        await ctx.send(Queue.addtoqueue(qid, ctx.author))
+        await ctx.send(Queue.addtoqueue(qid, ctx.author.id))
+
+    @commands.command(aliases=('ask',))
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
+    async def question(self, ctx, *args):
+        qid = (ctx.guild.id, ctx.channel.id)
+        qmsg = ' '.join(args)
+        await ctx.send(Queue.addtoqueue(qid, ctx.author.id, qmsg))
+
+    @commands.command()
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
+    async def answer(self, ctx, idx: int, answer=None):
+        ''' Answer a question. '''
+        qid = (ctx.guild.id, ctx.channel.id)
+        await Queue.queues[qid].answer(ctx, idx, answer)
+
+    @commands.command()
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
+    async def follow(self, ctx, idx:int=None):
+        ''' Follow a question. '''
+        qid = (ctx.guild.id, ctx.channel.id)
+        await ctx.send(Queue.queues[qid].follow(ctx.author.id, idx))
 
     @commands.command()
     @commands.check(Queue.qcheck)
@@ -237,7 +362,7 @@ class QueueCog(commands.Cog):
         await ctx.send(Queue.queues[(ctx.guild.id, ctx.channel.id)].whereis(uid))
 
     @commands.command()
-    @commands.check(Queue.qcheck)
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def queue(self, ctx, *, member: discord.Member = None):
         """ Admin command: check and add to the queue. """
