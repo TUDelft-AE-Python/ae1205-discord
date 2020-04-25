@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import discord
 from discord.ext import commands
 from cogs import QueueCog, Poll
@@ -15,6 +16,9 @@ class EduBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='!', case_insensitive=True)
         self.classrooms = dict()
+        self.datadir = Path.joinpath(Path.home(), '.edubot')
+        if not Path.exists(self.datadir):
+            Path.mkdir(self.datadir)
         self.add_cog(QueueCog(self))
         self.add_cog(Poll(self))
 
