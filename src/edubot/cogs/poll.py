@@ -1,19 +1,24 @@
-import discord
-from discord.ext import commands
+import io  # For generating discord .png
 import json
-import emoji                                    # Library used for handling emoji codes
+import os  # For checking if quiz file exists
+
+import discord
+import emoji  # Library used for handling emoji codes
 import matplotlib.pyplot as plt
-from matplotlib.ticker import PercentFormatter
 import numpy as np
-import io                                       # For generating discord .png
-import os                                       # For checking if quiz file exists
+import pkg_resources
+from discord.ext import commands
+from matplotlib.ticker import PercentFormatter
 
 # Define a shorthand for obtaining the emoji belonging to a :emoji: string
 get_emoji = lambda em: emoji.emojize(em, use_aliases=True)
 
 
-# Global settings for quizzes (This path must be relative to the main file, i.e. edubot.py)
-quiz_directory = "./cogs/quizzes/"
+# Global settings for quizzes (This path must be relative to the main
+# file, i.e. edubot.py)
+
+QUIZ_DIRECTORY = pkg_resources.resource_filename("edubot", "static/quizzes/")
+
 
 class Quiz:
 
@@ -178,7 +183,7 @@ class Poll(commands.Cog):
             quiz_filename += ".json"
 
         # Check if the filename specified actually exists
-        if not os.path.exists(quiz_directory+quiz_filename):
+        if not os.path.exists(QUIZ_DIRECTORY+quiz_filename):
             await ctx.channel.send(
                 "<@{}> The filename provided does not seem to exist, please check spelling and try again.".format(
                     ctx.author.id
@@ -188,7 +193,7 @@ class Poll(commands.Cog):
             return
 
         # Create the new quiz
-        new_quiz = Quiz(quiz_name,quiz_directory+quiz_filename,quiz_creator)
+        new_quiz = Quiz(quiz_name,QUIZ_DIRECTORY+quiz_filename,quiz_creator)
 
         # Create the message belonging to the quiz and give it a nice green coloured embed
         title, description, emojis = new_quiz.generate_quiz_message()
@@ -268,12 +273,3 @@ class Poll(commands.Cog):
 
         # Call the vote command. If an invalid emoji has been used, this will do nothing
         self.quizzes[message_id].vote(reaction_member.id, str(ctx.emoji))
-
-
-
-
-
-
-
-
-
