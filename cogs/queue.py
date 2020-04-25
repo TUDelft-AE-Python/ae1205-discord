@@ -135,17 +135,26 @@ class ReviewQueue(Queue):
         # Get the next student in the queue
         count = len(self.queue)
         member = await ctx.guild.fetch_member(self.queue.pop(0))
+        unready = [] 
         while count > 0 and not getvoicechan(member):
             count -= 1
             await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
                               'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
-            # Put the student back in the queue, and get the next one to try
-            self.queue.insert(10, member.id)
+            # Store the studentID to place them back in the queue, and get the next one to try
+            unready.append(member)
             if count:
                 member = await ctx.guild.fetch_member(self.queue.pop(0))
             else:
                 await ctx.send(f'<@{ctx.author.id}> : There\'s noone in the queue who is ready (in a voice lounge)!')
+                self.queue = unready
                 return
+        # Placement of unready depends on the length of the queue left. Priority goes
+        # to those who are ready, but doesn't send unready to the end of the queue.
+        if count <= len(unready):
+            self.queue += unready
+        else:
+            insertPos = min(count // 2, 10)
+            self.queue = self.queue[:insertPos] + unready + self.queue[insertPos:]
 
         # move the student to the callee's voice channel, and store him/her
         # as assigned for the caller
@@ -165,6 +174,12 @@ class ReviewQueue(Queue):
                 await self.bot.dm(member,
                                   f'Almost there {member.name}, You\'re second in line for the queue in <#{ctx.channel.id}>!' +
                                   ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+            if len(self.queue) > 5:
+                # Also send a message to the fifth person in the queue
+                member = await ctx.guild.fetch_member(self.queue[4])
+                await self.bot.dm(member,
+                                  f'Your patience will soon be rewarded, {member.name}... You\'re fifth in line for the queue in <#{ctx.channel.id}>!' +
+                                  '' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!')
 
     async def putback(self, ctx):
         ''' Put the student you currently have in your voice channel back in the queue. '''
