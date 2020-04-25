@@ -1,2 +1,4 @@
-from cogs.queue import QueueCog
-from cogs.poll import Poll
+from .poll import Poll
+from .queue import QueueCog
+
+__all__ = ["QueueCog", "Poll"]
