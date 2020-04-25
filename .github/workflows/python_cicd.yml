@@ -44,20 +44,15 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install .[dev]
-    - name: Linting with Flake8
+    - name: Linting/Style Checking with Flake8 (Black, isort, docstrings)
       run: |
         pip install flake8
         # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --show-source --statistics
-    - name: Code Formatting with Black
-      run: |
-        black . --check
-
+        flake8 . --count --statistics
     - name: Unit Testing with Pytest
       run: |
         pip install pytest
         pytest
-
     - name: Code Coverage Analysis
       run: |
         coverage report --fail-under=90
