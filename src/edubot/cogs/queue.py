@@ -1,10 +1,28 @@
+# Discord bot for the TU Delft Aerospace Engineering Python course
+# Copyright (C) 2020 Delft University of Technology
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Affero General Public License for more details.
+
+# You should have received a copy of the GNU Affero General Public
+# License along with this program.
+# If not, see <https://www.gnu.org/licenses/>.
+
+from collections import OrderedDict
+
 import discord
 from discord.ext import commands
-from collections import OrderedDict
 
 
 def getvoicechan(member):
-    ''' Get member's voice channel. 
+    ''' Get member's voice channel.
         Returns: The members voice channel, or None when not in a channel.
     '''
     return member.voice.channel if member and member.voice else None
@@ -240,7 +258,7 @@ class QuestionQueue(Queue):
     async def answer(self, ctx, idx, answer=None):
         if idx not in self.queue:
             await ctx.send(f'<@{ctx.author.id}>: No question in the queue with index {idx}!')
-        
+
         elif answer:
             # This is a text-based answer
             qstn = self.queue.pop(idx)
@@ -270,7 +288,8 @@ class QuestionQueue(Queue):
                     qlst.append(f'Question {idx} at position {pos}')
         if not qlst:
             return f'You are not following questions in this channel <@{uid}>!'
-        return f'Questions followed by <@{uid}>:\n' + '\n'.join(qlst) 
+        return f'Questions followed by <@{uid}>:\n' + '\n'.join(qlst)
+
 
 class QueueCog(commands.Cog):
     def __init__(self, bot):
@@ -349,7 +368,7 @@ class QueueCog(commands.Cog):
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
-    async def follow(self, ctx, idx:int=None):
+    async def follow(self, ctx, idx: int = None):
         ''' Follow a question. '''
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.send(Queue.queues[qid].follow(ctx.author.id, idx))
