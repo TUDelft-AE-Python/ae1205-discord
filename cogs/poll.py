@@ -411,6 +411,9 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def view_quizzes(self,ctx):
+
+        '''Function to list all stored json files as well as all active quizzes'''
+
         json_files = [path.name for path in list(self.datadir.rglob("*.json"))]
         currently_active = [self.quizzes[message_id].name for message_id in self.quizzes]
         to_send = "Quiz JSON files: \n- "*(len(json_files)>0) + "\n- ".join(json_files) + "\n\n" + \
@@ -429,6 +432,9 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def inspect_quiz_json(self,ctx,*args):
+
+        '''Function to send stored json file via private message to the user'''
+
         filename = (" ".join(args)).rstrip(".json") + ".json"
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
@@ -441,10 +447,13 @@ class Poll(commands.Cog):
                                                         file=discord.File(filepath))
         await ctx.message.delete()
 
-    @commands.command("delete-quiz",aliases=("deletequiz","delete_quiz","removequiz","remove-quiz","remove_quiz"))
+    @commands.command("delete-quiz", aliases=("deletequiz","delete_quiz","removequiz","remove-quiz","remove_quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def remove_quiz(self,ctx,*args):
+
+        '''Function to remove a stored json file'''
+
         filename = (" ".join(args)).rstrip(".json") + ".json"
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
@@ -458,7 +467,9 @@ class Poll(commands.Cog):
 
 
     async def quiz_timer(self, timer_duration, message_object):
+
         '''Function to dynamicall update the timer value on a quiz and automatically end it'''
+
         timer = timer_duration
         t = lambda x: f"{0 if x//60 < 10 else ''}{x // 60}:{0 if x % 60 < 10 else ''}{x % 60}{0 if x % 60 == 0 else ''}"
 
