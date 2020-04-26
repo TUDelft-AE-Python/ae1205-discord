@@ -46,9 +46,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install .[dev]
     - name: Linting/Style Checking with Flake8 (Black, isort, docstrings)
+    # FIXME: Currently flake8 does not raise any errors due to --exit-zero
       run: |
         pip install flake8
-        # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --statistics --exit-zero
     - name: Unit Testing with Pytest
       run: |
@@ -58,3 +58,4 @@ jobs:
       run: |
         coverage report --fail-under=30
 
+# TODO add deploy job that deploys to Heroku on commits tagged with vX.Y.Z
