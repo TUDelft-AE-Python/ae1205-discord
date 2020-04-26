@@ -15,9 +15,6 @@ from copy import copy
 get_emoji = lambda em: emoji.emojize(em, use_aliases=True)
 
 
-# Global settings for quizzes (This path must be relative to the main file, i.e. edubot.py)
-quiz_directory = "./cogs/quizzes/"
-
 class Quiz:
 
     """
