@@ -202,6 +202,27 @@ class ReviewQueue(Queue):
         except ValueError:
             return f'You are not in the queue in this channel <@{uid}>!'
 
+    def fromhistory(self, ctx):
+        # Front-fill the queue with the channel message history
+        oldQueue = []
+        await ctx.channel.send('Parsing old messages...')
+        async for message in ctx.channel.history(limit=None, oldest_first=True):
+            if message.content.casefold.startswith('ready'):
+                reacts = await message.reactions()
+                if '✅' in reacts:
+                    await message.delete()
+                else:
+                    oldQueue.append(message.author)
+            # if not student saying ready, check if TA/Tutor message
+            elif len(message.author.roles) == 2:
+                pass
+            # not TA/Tutor, not student getting ready. Ergo clutter
+            else:
+                await message.delete()
+        # if between !makequeue and !fromhistory people said !queueme, this
+        # puts them at the back of the queue
+        self.queue = oldQueue + self.queue
+
 
 class QuestionQueue(Queue):
     qtype = 'Question'
