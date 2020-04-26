@@ -8,7 +8,6 @@ import numpy as np
 import io                                       # For generating discord .png
 import pickle                                   # For saving all currently active quizzes
 import asyncio
-from copy import copy
 
 
 # Define a shorthand for obtaining the emoji belonging to a :emoji: string
