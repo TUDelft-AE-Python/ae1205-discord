@@ -153,7 +153,7 @@ class ReviewQueue(Queue):
         # Get the next student in the queue
         count = len(self.queue)
         member = await ctx.guild.fetch_member(self.queue.pop(0))
-        unready = [] 
+        unready = []
         while count > 0 and not getvoicechan(member):
             count -= 1
             await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
@@ -220,7 +220,7 @@ class ReviewQueue(Queue):
         except ValueError:
             return f'You are not in the queue in this channel <@{uid}>!'
 
-    def fromhistory(self, ctx):
+    async def fromhistory(self, ctx):
         # Front-fill the queue with the channel message history
         oldQueue = []
         await ctx.channel.send('Parsing old messages...')
