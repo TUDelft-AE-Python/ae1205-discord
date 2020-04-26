@@ -18,4 +18,41 @@
 
 """Contains config options, and custom markers/fixtures for pytest."""
 
+import builtins
+from dataclasses import dataclass, field
+from typing import List
+
 import pytest
+
+
+@dataclass
+class PrintCache:
+
+    statements: List[str] = field(default_factory=list)
+
+    @property
+    def statement(self):  # noqa
+        return self.statements[-1]
+
+    def __call__(self, statement):  # noqa
+        self.statements.append(statement)
+
+
+@pytest.fixture(scope="function")
+def capture_print(monkeypatch) -> PrintCache:
+    """Capturs print statements from within the current test.
+
+    All print statements:: can be accessed as follows:
+
+        >>> capture_print.statements
+
+    However, if only the latest print_statement as a :py:obj:`str` is
+    desired the :py:attribute:`PrintCache.statement` property can be
+    used::
+
+        >>> capture_print.statement
+
+    """
+    p_cache = PrintCache()
+    monkeypatch.setattr(builtins, "print", p_cache)
+    return p_cache
