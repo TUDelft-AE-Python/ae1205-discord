@@ -23,7 +23,22 @@ from typing import Optional
 
 import click
 
-from edubot.bot import EduBot
+try:
+    from edubot.bot import EduBot
+except ImportError as e:  # Edubot is not installed
+    if not __package__:
+        # run.py is being run locally as a script
+        import sys
+        import inspect
+
+        filepath = inspect.getfile(inspect.currentframe())  # path of run.py
+        sys.path.insert(0, os.path.join(os.path.dirname(filepath), ".."))
+        from edubot.bot import EduBot
+    else:
+        # Something went very wrong, EduBot is not installed and run.py
+        # is imported as a package. This is deffinitely not the intended
+        # usage so we raise the exception
+        raise e
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
