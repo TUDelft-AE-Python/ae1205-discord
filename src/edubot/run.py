@@ -15,7 +15,7 @@
 # License along with this program.
 # If not, see <https://www.gnu.org/licenses/>.
 
-"""Contains the :py:func:`cli` the entry-point of EduBot."""
+"""Contains the :py:func:`cli` to run EduBot from command-line."""
 
 
 import os
@@ -43,5 +43,4 @@ def cli(token: str):
 
 
 if __name__ == "__main__":
-    # Prevents gc (garbage-collection) of the bot
-    bot = cli()
+    bot = cli()  # Assignment of the bot prevents gc (garbage-collection)
