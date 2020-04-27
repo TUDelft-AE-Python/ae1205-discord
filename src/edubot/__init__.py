@@ -1,0 +1,1 @@
+from edubot.bot import EduBot

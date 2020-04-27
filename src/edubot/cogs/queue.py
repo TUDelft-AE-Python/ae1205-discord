@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Affero General Public
 # License along with this program.
 # If not, see <https://www.gnu.org/licenses/>.
-
+import json
 from collections import OrderedDict
 
 import discord
@@ -46,7 +46,7 @@ class Queue:
     def loadall(cls):
         msgs = []
         for qfile in cls.datadir.iterdir():
-            qidstr = qfile.name.replace('.dat', '').split('-')
+            qidstr = qfile.name.replace('.json', '').split('-')
             qid = tuple(int(i) for i in qidstr)
             msgs.append(cls.load(qid))
         return '\n'.join(msgs)
@@ -63,13 +63,13 @@ class Queue:
         return False
 
     @classmethod
-    def makequeue(cls, qid, qtype):
+    def makequeue(cls, qid, qtype, guildname, channame):
         if qid in cls.queues:
             return 'This channel already has a queue!'
         else:
             # Get the correct subclass of Queue
             qclass = next(qclass for qclass in cls.__subclasses__() if qclass.qtype == qtype)
-            cls.queues[qid] = qclass(qid)
+            cls.queues[qid] = qclass(qid, guildname, channame)
             return f'Created a {qtype} queue'
 
     @classmethod
@@ -78,18 +78,22 @@ class Queue:
 
     @classmethod
     def load(cls, qid):
+        ''' Load queue object from file. '''
         try:
-            fname = cls.datadir.joinpath(f'{qid[0]}-{qid[1]}.dat')
+            fname = cls.datadir.joinpath(f'{qid[0]}-{qid[1]}.json')
             with open(fname, 'r') as fin:
-                qtype = fin.readline().strip()
-                cls.makequeue(qid, qtype)
-                cls.queues[qid].fromfile(fin)
+                qjson = json.load(fin)
+                qtype = qjson['qtype']
+                cls.makequeue(qid, qtype, qjson['guildname'], qjson['channame'])
+                cls.queues[qid].fromfile(qjson['qdata'])
                 return f'Loaded a {qtype} queue for <#{qid[1]}> with {cls.queues[qid].size()} entries.'
         except IOError:
             return 'No saved queue available for this channel.'
 
-    def __init__(self, qid):
+    def __init__(self, qid, guildname, channame):
         self.qid = qid
+        self.guildname = guildname
+        self.channame = channame
         self.queue = []
 
     def size(self):
@@ -99,17 +103,23 @@ class Queue:
         return ''
 
     def fromfile(self, fin):
+        ''' Build queue from data out of json file. '''
         pass
 
     def tofile(self, fout):
+        ''' Return queue data for storage in json file. '''
         pass
 
     def save(self):
-        fname = Queue.datadir.joinpath(f'{self.qid[0]}-{self.qid[1]}.dat')
+        ''' Save queue object to file. '''
+        fname = Queue.datadir.joinpath(f'{self.qid[0]}-{self.qid[1]}.json')
         print('Saving', fname)
         with open(fname, 'w') as fout:
-            fout.write(self.qtype + '\n')
-            self.tofile(fout)
+            qjson = dict(qtype=self.qtype,
+                         guildname=self.guildname,
+                         channame=self.channame,
+                         qdata=self.tofile())
+            json.dump(qjson, fout)
 
     def whereis(self, uid):
         pass
@@ -118,16 +128,17 @@ class Queue:
 class ReviewQueue(Queue):
     qtype = 'Review'
 
-    def __init__(self, qid):
-        super().__init__(qid)
+    def __init__(self, qid, guildname, channame):
+        super().__init__(qid, guildname, channame)
         self.assigned = dict()
 
-    def fromfile(self, fin):
-        self.queue = [int(el) for el in fin.read().strip().split(',')]
+    def fromfile(self, qdata):
+        ''' Build queue from data out of json file. '''
+        self.queue = qdata
 
-    def tofile(self, fout):
-        out = ','.join([str(el) for el in self.queue])
-        fout.write(out)
+    def tofile(self):
+        ''' Return queue data for storage in json file. '''
+        return self.queue
 
     def add(self, member):
         try:
@@ -250,22 +261,20 @@ class QuestionQueue(Queue):
             self.qmsg = qmsg
             self.followers = [askedby]
 
-    def __init__(self, qid):
-        super().__init__(qid)
+    def __init__(self, qid, guildname, channame):
+        super().__init__(qid, guildname, channame)
         self.queue = OrderedDict()
 
-    def fromfile(self, fin):
-        data = [line.strip() for line in fin.readlines()]
-        qmsgs, qfoll = data[::2], data[1::2]
-        for idx, (qmsg, qf) in enumerate(zip(qmsgs, qfoll[:len(qmsgs)])):
+    def fromfile(self, qdata):
+        ''' Build queue from data out of json file. '''
+        for idx, (qmsg, qf) in enumerate(qdata):
             question = QuestionQueue.Question(0, qmsg)
-            question.followers = [int(f) for f in qf.strip().split()]
+            question.followers = qf
             self.queue[idx+1] = question
 
-    def tofile(self, fout):
-        for qstn in self.queue.values():
-            fout.write(qstn.qmsg + '\n')
-            fout.write(' '.join([str(f) for f in qstn.followers]) + '\n')
+    def tofile(self):
+        ''' Return queue data for storage in json file. '''
+        return [(q.qmsg, q.followers) for q in self.queue.values()]
 
     def follow(self, member, idx=None):
         """ Follow a question. """
@@ -368,7 +377,7 @@ class QueueCog(commands.Cog):
     async def makequeue(self, ctx, qtype='Review'):
         """ Make a queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
-        await ctx.send(Queue.makequeue(qid, qtype))
+        await ctx.send(Queue.makequeue(qid, qtype, ctx.guild.name, ctx.channel.name))
 
     @commands.command()
     @commands.check(Queue.qcheck)
