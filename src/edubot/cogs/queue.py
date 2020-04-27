@@ -68,7 +68,6 @@ class Queue:
             return 'This channel already has a queue!'
         else:
             # Get the correct subclass of Queue
-            print('qtype =', qtype)
             qclass = next(qclass for qclass in cls.__subclasses__() if qclass.qtype == qtype)
             cls.queues[qid] = qclass(qid, guildname, channame)
             return f'Created a {qtype} queue'
