@@ -1,4 +1,5 @@
 import asyncio
+import pickle
 
 import discord
 import emoji  # Library used for handling emoji codes
