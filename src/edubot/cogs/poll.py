@@ -1,14 +1,12 @@
-import discord
-from discord.ext import commands
-import json
-import emoji                                    # Library used for handling emoji codes
-import matplotlib.pyplot as plt
-from matplotlib.ticker import PercentFormatter
-import numpy as np
-import io                                       # For generating discord .png
-import pickle                                   # For saving all currently active quizzes
 import asyncio
-
+import pickle
+import json
+import discord
+import emoji  # Library used for handling emoji codes
+import matplotlib.pyplot as plt
+import numpy as np
+from discord.ext import commands
+from matplotlib.ticker import PercentFormatter
 
 # Define a shorthand for obtaining the emoji belonging to a :emoji: string
 get_emoji = lambda em: emoji.emojize(em, use_aliases=True)
@@ -484,14 +482,3 @@ class Poll(commands.Cog):
             timer -= 1
 
         await self.finish_quiz(message_object.id)
-
-
-
-
-
-
-
-
-
-
-

@@ -1,10 +1,28 @@
+# Discord bot for the TU Delft Aerospace Engineering Python course
+# Copyright (C) 2020 Delft University of Technology
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Affero General Public License for more details.
+
+# You should have received a copy of the GNU Affero General Public
+# License along with this program.
+# If not, see <https://www.gnu.org/licenses/>.
+import json
+from collections import OrderedDict
+
 import discord
 from discord.ext import commands
-from collections import OrderedDict
 
 
 def getvoicechan(member):
-    ''' Get member's voice channel. 
+    ''' Get member's voice channel.
         Returns: The members voice channel, or None when not in a channel.
     '''
     return member.voice.channel if member and member.voice else None
@@ -28,7 +46,7 @@ class Queue:
     def loadall(cls):
         msgs = []
         for qfile in cls.datadir.iterdir():
-            qidstr = qfile.name.replace('.dat', '').split('-')
+            qidstr = qfile.name.replace('.json', '').split('-')
             qid = tuple(int(i) for i in qidstr)
             msgs.append(cls.load(qid))
         return '\n'.join(msgs)
@@ -45,13 +63,13 @@ class Queue:
         return False
 
     @classmethod
-    def makequeue(cls, qid, qtype):
+    def makequeue(cls, qid, qtype, guildname, channame):
         if qid in cls.queues:
             return 'This channel already has a queue!'
         else:
             # Get the correct subclass of Queue
             qclass = next(qclass for qclass in cls.__subclasses__() if qclass.qtype == qtype)
-            cls.queues[qid] = qclass(qid)
+            cls.queues[qid] = qclass(qid, guildname, channame)
             return f'Created a {qtype} queue'
 
     @classmethod
@@ -60,18 +78,22 @@ class Queue:
 
     @classmethod
     def load(cls, qid):
+        ''' Load queue object from file. '''
         try:
-            fname = cls.datadir.joinpath(f'{qid[0]}-{qid[1]}.dat')
+            fname = cls.datadir.joinpath(f'{qid[0]}-{qid[1]}.json')
             with open(fname, 'r') as fin:
-                qtype = fin.readline().strip()
-                cls.makequeue(qid, qtype)
-                cls.queues[qid].fromfile(fin)
+                qjson = json.load(fin)
+                qtype = qjson['qtype']
+                cls.makequeue(qid, qtype, qjson['guildname'], qjson['channame'])
+                cls.queues[qid].fromfile(qjson['qdata'])
                 return f'Loaded a {qtype} queue for <#{qid[1]}> with {cls.queues[qid].size()} entries.'
         except IOError:
             return 'No saved queue available for this channel.'
 
-    def __init__(self, qid):
+    def __init__(self, qid, guildname, channame):
         self.qid = qid
+        self.guildname = guildname
+        self.channame = channame
         self.queue = []
 
     def size(self):
@@ -81,17 +103,23 @@ class Queue:
         return ''
 
     def fromfile(self, fin):
+        ''' Build queue from data out of json file. '''
         pass
 
     def tofile(self, fout):
+        ''' Return queue data for storage in json file. '''
         pass
 
     def save(self):
-        fname = Queue.datadir.joinpath(f'{self.qid[0]}-{self.qid[1]}.dat')
+        ''' Save queue object to file. '''
+        fname = Queue.datadir.joinpath(f'{self.qid[0]}-{self.qid[1]}.json')
         print('Saving', fname)
         with open(fname, 'w') as fout:
-            fout.write(self.qtype + '\n')
-            self.tofile(fout)
+            qjson = dict(qtype=self.qtype,
+                         guildname=self.guildname,
+                         channame=self.channame,
+                         qdata=self.tofile())
+            json.dump(qjson, fout)
 
     def whereis(self, uid):
         pass
@@ -100,16 +128,17 @@ class Queue:
 class ReviewQueue(Queue):
     qtype = 'Review'
 
-    def __init__(self, qid):
-        super().__init__(qid)
+    def __init__(self, qid, guildname, channame):
+        super().__init__(qid, guildname, channame)
         self.assigned = dict()
 
-    def fromfile(self, fin):
-        self.queue = [int(el) for el in fin.read().strip().split(',')]
+    def fromfile(self, qdata):
+        ''' Build queue from data out of json file. '''
+        self.queue = qdata
 
-    def tofile(self, fout):
-        out = ','.join([str(el) for el in self.queue])
-        fout.write(out)
+    def tofile(self):
+        ''' Return queue data for storage in json file. '''
+        return self.queue
 
     def add(self, member):
         try:
@@ -135,17 +164,26 @@ class ReviewQueue(Queue):
         # Get the next student in the queue
         count = len(self.queue)
         member = await ctx.guild.fetch_member(self.queue.pop(0))
+        unready = []
         while count > 0 and not getvoicechan(member):
             count -= 1
             await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
                               'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
-            # Put the student back in the queue, and get the next one to try
-            self.queue.insert(10, member.id)
+            # Store the studentID to place them back in the queue, and get the next one to try
+            unready.append(member)
             if count:
                 member = await ctx.guild.fetch_member(self.queue.pop(0))
             else:
                 await ctx.send(f'<@{ctx.author.id}> : There\'s noone in the queue who is ready (in a voice lounge)!')
+                self.queue = unready
                 return
+        # Placement of unready depends on the length of the queue left. Priority goes
+        # to those who are ready, but doesn't send unready to the end of the queue.
+        if count <= len(unready):
+            self.queue += unready
+        else:
+            insertPos = min(count // 2, 10)
+            self.queue = self.queue[:insertPos] + unready + self.queue[insertPos:]
 
         # move the student to the callee's voice channel, and store him/her
         # as assigned for the caller
@@ -165,6 +203,12 @@ class ReviewQueue(Queue):
                 await self.bot.dm(member,
                                   f'Almost there {member.name}, You\'re second in line for the queue in <#{ctx.channel.id}>!' +
                                   ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+            if len(self.queue) > 5:
+                # Also send a message to the fifth person in the queue
+                member = await ctx.guild.fetch_member(self.queue[4])
+                await self.bot.dm(member,
+                                  f'Your patience will soon be rewarded, {member.name}... You\'re fifth in line for the queue in <#{ctx.channel.id}>!' +
+                                  '' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!')
 
     async def putback(self, ctx):
         ''' Put the student you currently have in your voice channel back in the queue. '''
@@ -187,6 +231,27 @@ class ReviewQueue(Queue):
         except ValueError:
             return f'You are not in the queue in this channel <@{uid}>!'
 
+    async def fromhistory(self, ctx):
+        # Front-fill the queue with the channel message history
+        oldQueue = []
+        await ctx.channel.send('Parsing old messages...')
+        async for message in ctx.channel.history(limit=None, oldest_first=True):
+            if message.content.casefold.startswith('ready'):
+                reacts = await message.reactions()
+                if '✅' in reacts:
+                    await message.delete()
+                else:
+                    oldQueue.append(message.author)
+            # if not student saying ready, check if TA/Tutor message
+            elif len(message.author.roles) == 2:
+                pass
+            # not TA/Tutor, not student getting ready. Ergo clutter
+            else:
+                await message.delete()
+        # if between !makequeue and !fromhistory people said !queueme, this
+        # puts them at the back of the queue
+        self.queue = oldQueue + self.queue
+
 
 class QuestionQueue(Queue):
     qtype = 'Question'
@@ -196,22 +261,20 @@ class QuestionQueue(Queue):
             self.qmsg = qmsg
             self.followers = [askedby]
 
-    def __init__(self, qid):
-        super().__init__(qid)
+    def __init__(self, qid, guildname, channame):
+        super().__init__(qid, guildname, channame)
         self.queue = OrderedDict()
 
-    def fromfile(self, fin):
-        data = [line.strip() for line in fin.readlines()]
-        qmsgs, qfoll = data[::2], data[1::2]
-        for idx, (qmsg, qf) in enumerate(zip(qmsgs, qfoll[:len(qmsgs)])):
+    def fromfile(self, qdata):
+        ''' Build queue from data out of json file. '''
+        for idx, (qmsg, qf) in enumerate(qdata):
             question = QuestionQueue.Question(0, qmsg)
-            question.followers = [int(f) for f in qf.strip().split()]
+            question.followers = qf
             self.queue[idx+1] = question
 
-    def tofile(self, fout):
-        for qstn in self.queue.values():
-            fout.write(qstn.qmsg + '\n')
-            fout.write(' '.join([str(f) for f in qstn.followers]) + '\n')
+    def tofile(self):
+        ''' Return queue data for storage in json file. '''
+        return [(q.qmsg, q.followers) for q in self.queue.values()]
 
     def follow(self, member, idx=None):
         """ Follow a question. """
@@ -240,7 +303,7 @@ class QuestionQueue(Queue):
     async def answer(self, ctx, idx, answer=None):
         if idx not in self.queue:
             await ctx.send(f'<@{ctx.author.id}>: No question in the queue with index {idx}!')
-        
+
         elif answer:
             # This is a text-based answer
             qstn = self.queue.pop(idx)
@@ -270,7 +333,8 @@ class QuestionQueue(Queue):
                     qlst.append(f'Question {idx} at position {pos}')
         if not qlst:
             return f'You are not following questions in this channel <@{uid}>!'
-        return f'Questions followed by <@{uid}>:\n' + '\n'.join(qlst) 
+        return f'Questions followed by <@{uid}>:\n' + '\n'.join(qlst)
+
 
 class QueueCog(commands.Cog):
     def __init__(self, bot):
@@ -313,7 +377,7 @@ class QueueCog(commands.Cog):
     async def makequeue(self, ctx, qtype='Review'):
         """ Make a queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
-        await ctx.send(Queue.makequeue(qid, qtype))
+        await ctx.send(Queue.makequeue(qid, qtype, ctx.guild.name, ctx.channel.name))
 
     @commands.command()
     @commands.check(Queue.qcheck)
@@ -349,7 +413,7 @@ class QueueCog(commands.Cog):
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
-    async def follow(self, ctx, idx:int=None):
+    async def follow(self, ctx, idx: int = None):
         ''' Follow a question. '''
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.send(Queue.queues[qid].follow(ctx.author.id, idx))
