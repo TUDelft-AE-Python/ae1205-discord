@@ -417,8 +417,9 @@ class Poll(commands.Cog):
         to_send = "Quiz JSON files: \n- "*(len(json_files)>0) + "\n- ".join(json_files) + "\n\n" + \
             "Currently active quizzes: \n- "*(len(currently_active) > 0) + "\n- ".join(currently_active)
 
+
         # Check if the string is empty
-        if len(to_send) == 0:
+        if len(to_send.strip()) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> There are no json files stored and no quizzes active.",
                                    delete_after=4)
         else:
