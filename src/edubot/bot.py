@@ -23,7 +23,7 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-from cogs import Poll, QueueCog
+from edubot.cogs import Poll, QueueCog
 
 
 class EduBot(commands.Bot):
@@ -56,9 +56,3 @@ class EduBot(commands.Bot):
             if not user.dm_channel:
                 await user.create_dm()
             await user.dm_channel.send(message)
-
-
-if __name__ == "__main__":
-    TOKEN = os.getenv("DISCORD_TOKEN")
-    bot = EduBot()
-    bot.run(TOKEN)
