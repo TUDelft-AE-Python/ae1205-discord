@@ -23,7 +23,7 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-from edubot.cogs import Poll, QueueCog
+from cogs import Poll, QueueCog
 
 
 class EduBot(commands.Bot):
