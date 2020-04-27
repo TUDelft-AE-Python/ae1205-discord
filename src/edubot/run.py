@@ -43,18 +43,6 @@ except ImportError as e:  # Edubot is not installed
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 
-@click.command()
-@click.option("--token", default=TOKEN, help="Specifies the Discord API Token")
-def cli(token: str):
-    """Command Line Interface (CLI) of :py:class:`Edubot`.
-
-    Args:
-        token: Discord API Token
-
-    """
-    return BotRunner(token)
-
-
 class BotRunner:
     """Runs :py:class:`EduBot` in the standard blocking manner."""
 
@@ -63,7 +51,7 @@ class BotRunner:
         self.bot = EduBot()
         self.run(token)
 
-    def run(self, token):
+    def run(self, token: str) -> None:
         """Runs the bot with the given ``token`` as a blocking call."""
         self.bot.run(token)
 
@@ -79,10 +67,26 @@ class InteractiveBotRunner(BotRunner):
     """Runs :py:class:`EduBot` in a non-blocking manner.
 
     This is suitable for running the bot with interactive consoles such
-    as IPython.
+    as IPython. An example would be sending out direct-messages to all
+    users currently in the Discord lobby::
+
+        >>> TOKEN = os.getenv("DISCORD_TOKEN")
+        >>> runner = InteractiveBotRunner(TOKEN)
+        >>> users = filter(
+        ...     lambda u: u is not runner.bot.user, runner.bot.users
+        ... )
+        >>> for user in users:
+        >>>     task = runner.bot.dm(user, "Hello!")
+        >>>     runner.create_task(task)
+
+    Note:
+        In the example above, :py:meth:`create_task` must be used to
+        perform the call to the Discord API. Otherwise a coroutine
+        object will be returned from simply calling methods of
+        :py:class:`EduBot`.
 
     Caution:
-        No clean-up action will be called after the Interactive Console
+        No clean-up action will be called after the interactive console
         is closed therefore no saving operations will take place. DO NOT
         USE THIS FOR ACTUAL SESSIONS!
     """
@@ -92,7 +96,7 @@ class InteractiveBotRunner(BotRunner):
         self.loop.set_debug(True)
         super().__init__(token)
 
-    def run(self, token):
+    def run(self, token: str) -> asyncio.Task:
         """Retrieves the active event loop and runs the bot on it.
 
         By retrieving the event-loop (if it exists) with
@@ -102,15 +106,27 @@ class InteractiveBotRunner(BotRunner):
         """
         self.create_task(self.bot.start(token))
 
-    def create_task(self, task):
-        """Runs a given ``task`` asynchroniously using asyncio.
+    def create_task(self, coroutine: asyncio.coroutine) -> asyncio.Task:
+        """Schedules a ``coroutine`` to be run by the event-loop.
 
         The purpose of this function is to simply reduce the amount of
         code that needs to be typed when a command needs to be issued
         from within the interactive console. All this method does is
         call :py:func:`asyncio.loop.create_task` on the given ``task``.
         """
-        self.loop.create_task(task)
+        return self.loop.create_task(coroutine)
+
+
+@click.command()
+@click.option("--token", default=TOKEN, help="Specifies the Discord API Token")
+def cli(token: str) -> BotRunner:
+    """Command Line Interface (CLI) of :py:class:`EduBot`.
+
+    Args:
+        token: Discord API Token
+
+    """
+    return BotRunner(token)
 
 
 def is_ipython() -> bool:
