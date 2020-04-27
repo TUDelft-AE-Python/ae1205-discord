@@ -1,9 +1,4 @@
 import asyncio
-import io  # For generating discord .png
-import json
-import os  # For checking if quiz file exists
-import pickle  # For saving all currently active quizzes
-from copy import copy
 
 import discord
 import emoji  # Library used for handling emoji codes
@@ -375,6 +370,7 @@ class Poll(commands.Cog):
         if len(args) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> No arguments were given!",
                                    delete_after=3)
+            await ctx.message.delete()
             return
 
         # If a file has been attached, this means the quiz is attached in a json file format
@@ -393,6 +389,7 @@ class Poll(commands.Cog):
                                    f"the message and provide the filename as argument provide filename, question, "
                                    f"answers and correct response as separate arguments.",
                                    delete_after=6)
+            await ctx.message.delete()
             return
         timer_value = ''
         # A timer value was added, which needs to be extracted now
@@ -412,42 +409,65 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def view_quizzes(self,ctx):
+
+        '''Function to list all stored json files as well as all active quizzes'''
+
         json_files = [path.name for path in list(self.datadir.rglob("*.json"))]
         currently_active = [self.quizzes[message_id].name for message_id in self.quizzes]
-        to_send = "Quiz JSON files: \n-"*(len(json_files)>0) + "\n- ".join(json_files) + "\n\n" + \
-            "Currently active quizzes: \n-"*(len(currently_active) > 0) + "\n- ".join(currently_active)
+        to_send = "Quiz JSON files: \n- "*(len(json_files)>0) + "\n- ".join(json_files) + "\n\n" + \
+            "Currently active quizzes: \n- "*(len(currently_active) > 0) + "\n- ".join(currently_active)
 
         # Check if the string is empty
         if len(to_send) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> There are no json files stored and no quizzes active.",
                                    delete_after=4)
-            await ctx.message.delete()
-            return
         else:
             embed = discord.Embed(title="Quiz JSON files and active quizzes", description=to_send, colour=0x41f109)
             await ctx.channel.send(embed=embed, delete_after=30)
-            await ctx.message.delete()
+        await ctx.message.delete()
 
     @commands.command("inspect_quiz", aliases=("inspectquiz","inspect-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def inspect_quiz_json(self,ctx,*args):
+
+        '''Function to send stored json file via private message to the user'''
+
         filename = (" ".join(args)).rstrip(".json") + ".json"
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
             await ctx.channel.send(f"<@{ctx.author.id}> That file does not exist!",
                                    delete_after=4)
-            await ctx.message.delete()
-            return
         else:
             await ctx.channel.send(f"<@{ctx.author.id}> File will be sent via private message.",
                                    delete_after=4)
             await self.bot.get_user(ctx.author.id).send(f"<@{ctx.author.id}> Here is the file that you requested.",
                                                         file=discord.File(filepath))
-            await ctx.message.delete()
+        await ctx.message.delete()
+
+    @commands.command("delete-quiz", aliases=("deletequiz","delete_quiz","removequiz","remove-quiz","remove_quiz"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def remove_quiz(self,ctx,*args):
+
+        '''Function to remove a stored json file'''
+
+        filename = (" ".join(args)).rstrip(".json") + ".json"
+        filepath = self.datadir.joinpath(filename)
+        if not filepath.exists():
+            await ctx.channel.send(f"<@{ctx.author.id}> That file does not exist!",
+                                   delete_after=4)
+        else:
+            filepath.unlink()
+            await ctx.channel.send(f"<@{ctx.author.id}> File deleted!",
+                                   delete_after=3)
+        await ctx.message.delete()
+
 
     async def quiz_timer(self, timer_duration, message_object):
+
         '''Function to dynamicall update the timer value on a quiz and automatically end it'''
+
         timer = timer_duration
         t = lambda x: f"{0 if x//60 < 10 else ''}{x // 60}:{0 if x % 60 < 10 else ''}{x % 60}{0 if x % 60 == 0 else ''}"
 
@@ -462,4 +482,3 @@ class Poll(commands.Cog):
             timer -= 1
 
         await self.finish_quiz(message_object.id)
-
