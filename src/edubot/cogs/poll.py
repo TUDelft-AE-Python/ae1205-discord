@@ -4,7 +4,6 @@ import discord
 import emoji  # Library used for handling emoji codes
 import matplotlib.pyplot as plt
 import numpy as np
-import pkg_resources
 from discord.ext import commands
 from matplotlib.ticker import PercentFormatter
 
