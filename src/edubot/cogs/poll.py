@@ -1,6 +1,6 @@
 import asyncio
 import pickle
-
+import json
 import discord
 import emoji  # Library used for handling emoji codes
 import matplotlib.pyplot as plt
