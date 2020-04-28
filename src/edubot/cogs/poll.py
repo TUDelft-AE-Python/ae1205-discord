@@ -357,7 +357,7 @@ class Poll(commands.Cog):
             quiz_name = " ".join(args)
 
             try:
-                quiz_to_finish = self.quizzes[list(filter(lambda k: self.quizzes[k].name, self.quizzes))[0]]
+                quiz_to_finish = self.quizzes[list(filter(lambda k: self.quizzes[k].name == quiz_name, self.quizzes))[0]]
             except Exception:
                 await ctx.channel.send(
                     f"<@{ctx.author.id}> That quiz does not exist, please check the spelling of the name you provided!",
