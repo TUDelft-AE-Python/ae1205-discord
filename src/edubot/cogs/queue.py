@@ -236,7 +236,9 @@ class ReviewQueue(Queue):
         oldQueue = []
         await ctx.channel.send('Parsing old messages...')
         async for message in ctx.channel.history(limit=None, oldest_first=True):
+            print(message.content.casefold())
             if message.content.casefold().startswith('ready'):
+                
                 reacts = await message.reactions()
                 if '✅' in reacts:
                     await message.delete()
@@ -362,7 +364,7 @@ class QueueCog(commands.Cog):
     async def takenext(self, ctx):
         """ Take the next in line from the queue. """
         qid = (ctx.guild.id, ctx.channel.id)
-        await self.queues[qid].takenext(ctx)
+        await Queue.queues[qid].takenext(ctx)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
@@ -370,7 +372,7 @@ class QueueCog(commands.Cog):
     async def putback(self, ctx):
         ''' Put the student you currently have in your voice channel back in the queue. '''
         qid = (ctx.guild.id, ctx.channel.id)
-        await self.queues[qid].putback(ctx)
+        await Queue.queues[qid].putback(ctx)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
