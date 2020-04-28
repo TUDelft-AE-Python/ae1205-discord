@@ -142,7 +142,7 @@ class Quiz:
 
         # Create a BytesIO buffer to temporarily store the image
         image_buffer = io.BytesIO()
-        image_buffer.name = f"{self.name}_quiz_feedback.png"
+        image_buffer.name = f"{self.name.replace(' ','_')}_quiz_feedback.png"
 
         # Set the plot style to be easier to view in Discord
         plt.style.use('dark_background')
