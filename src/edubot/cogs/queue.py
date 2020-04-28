@@ -45,7 +45,7 @@ class Queue:
     @classmethod
     def loadall(cls):
         msgs = []
-        for qfile in cls.datadir.iterdir():
+        for qfile in cls.datadir.rglob('*.json'):
             qidstr = qfile.name.replace('.json', '').split('-')
             qid = tuple(int(i) for i in qidstr)
             msgs.append(cls.load(qid))
