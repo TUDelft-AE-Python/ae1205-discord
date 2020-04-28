@@ -1,5 +1,4 @@
 import asyncio
-import jsonpickle
 import io
 import json
 import discord
