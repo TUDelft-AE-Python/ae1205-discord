@@ -170,7 +170,7 @@ class Quiz:
 
         # Show the values of the various bars in the bar chart above the bars
         for bar in barchart:
-            height = bar.get_height()
+            height = round(bar.get_height(),2)
             plt.gca().text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.2, f"{height}%",
                            ha='center', color='white', fontsize=15)
 
