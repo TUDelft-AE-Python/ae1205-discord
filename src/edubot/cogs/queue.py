@@ -417,10 +417,11 @@ class QueueCog(commands.Cog):
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
-    async def answer(self, ctx, idx: int, answer=None):
+    async def answer(self, ctx, idx: int, *answer):
         ''' Answer a question. '''
         qid = (ctx.guild.id, ctx.channel.id)
-        await Queue.queues[qid].answer(ctx, idx, answer)
+        ansstring = ' '.join(answer)
+        await Queue.queues[qid].answer(ctx, idx, ansstring)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
