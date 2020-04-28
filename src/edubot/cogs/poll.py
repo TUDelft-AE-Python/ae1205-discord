@@ -345,6 +345,13 @@ class Poll(commands.Cog):
         # Send the feedback chart to the person who created the quiz and the person who ended it
         for user_id in {author_id, quiz_to_finish.owner}:
             # Reset the buffer internal index to 0 again
+            feedback_chart.seek(0)
+
+            # Create the file object and embed again to avoid errors
+            file_object = discord.File(feedback_chart, filename=feedback_chart.name)
+            embed = discord.Embed(title=f"Feedback for {quiz_to_finish.name}", colour=0x41f109)
+            embed.set_image(url=f"attachment://{feedback_chart.name}")
+
             await message_channel.guild.get_member(user_id).send(embed=embed,file=file_object)
         # Remove the quiz from the internal dictionary
         self.quizzes.pop(quiz_to_finish.message_id)
