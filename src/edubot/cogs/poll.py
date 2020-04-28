@@ -227,6 +227,8 @@ class Poll(commands.Cog):
             quiz_filename = args[0]
             quiz_name = " ".join(args[1:])
             timer_value = None
+            if len(quiz_name) == 0:
+                raise Exception
 
             # A timer value has also been specified, which must be extracted before proceeding.
             if "timer=" in quiz_name.lower():
