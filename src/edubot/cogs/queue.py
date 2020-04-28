@@ -448,4 +448,4 @@ class QueueCog(commands.Cog):
             await ctx.send(f'There are {size} entries in the queue of <#{ctx.channel.id}>')
         else:
             # Member is passed, add him/her to the queue
-            await ctx.send(Queue.addtoqueue(qid, member))
+            await ctx.send(Queue.addtoqueue(qid, member.id))
