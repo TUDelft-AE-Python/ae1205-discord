@@ -48,7 +48,8 @@ class Quiz:
             self.question = str(json_data["question"])
             self.options = {i+1: str(option) for i,option in enumerate(json_data["options"])}
 
-            self.correct_answer = int(json_data["correct"])
+            correct = json_data["correct"]
+            self.correct_answer = None if len(correct) == 0 or correct in ("0","-1") else int(correct)
             self.votes = {i+1: [] for i in range(len(self.options))}
 
             # When the  file is read in, the timer specified there is used as a baseline. !makequiz and !startquiz
@@ -126,7 +127,11 @@ class Quiz:
         plt.xlabel("Answers")
 
         # Color the correct answer green
-        barchart.patches[self.correct_answer - 1].set_facecolor("g")
+        if self.correct_answer:
+            barchart.patches[self.correct_answer - 1].set_facecolor("g")
+        else:
+            for patch in barchart.patches:
+                patch.set_facecolor("b")
 
         # Show the values of the various bars in the bar chart above the bars
         for bar in barchart:
@@ -387,7 +392,7 @@ class Poll(commands.Cog):
         # If not, the json data must be given as an argument
         if not len(args) >= 4:
             await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Either attach the json file to "
-                                   f"the message and provide the filename as argument provide filename, question, "
+                                   f"the message and provide the filename as argument or provide filename, question, "
                                    f"answers and correct response as separate arguments.",
                                    delete_after=6)
             await ctx.message.delete()
@@ -398,8 +403,13 @@ class Poll(commands.Cog):
             timer_value = f', "timer":{args[4].lower().strip("timer=")}'
             args = args[:-1]
 
+        question = args[1]
+        correct = args[-1]
+        options_parsed = args[-2].split(";")
+        options_parsed = ','.join([f'"{opt}"' for opt in options_parsed])
+
         file_name = args[0].rstrip(".json") + ".json"
-        json_string = '{{"question": "{}", "options": [{}], "correct": {}{}}}'.format(*args[1:], timer_value)
+        json_string = f'{{"question": "{question}", "options": [{options_parsed}], "correct": "{correct}"{timer_value}}}'
 
         with open(self.datadir.joinpath(file_name), 'w') as file:
             file.write(json_string)
