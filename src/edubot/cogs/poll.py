@@ -1,5 +1,5 @@
 import asyncio
-import pickle
+import jsonpickle
 import io
 import json
 import discord
@@ -64,6 +64,42 @@ class Quiz:
             succesful = False
 
         return succesful, self
+
+    def create_save_data(self):
+
+        '''Function to store all data needed to reconstruct the class'''
+
+        toreturn = dict(
+            name=self.name,
+            messageid=self.message_id,
+            channelid=self.channel_id,
+            question=self.question,
+            correct=self.correct_answer,
+            options=self.options,
+            owner=self.owner,
+            votes=self.votes,
+            timer=self.timer,
+            counted_votes={self.options[index]: len(self.votes[index]) for index in range(1, len(self.options) + 1)}
+        )
+
+        return toreturn
+
+    def load_from_save_data(self, save_dict):
+
+        '''Function for loading values into the class from a dictionary'''
+
+        self.name = save_dict["name"]
+        self.message_id = int(save_dict["messageid"])
+        self.channel_id = int(save_dict["channelid"])
+        self.question = save_dict["question"]
+        self.options = save_dict["options"]
+        self.correct_answer = None if not save_dict["correct"] else int(save_dict["correct"])
+        self.owner = int(save_dict["owner"])
+        self.votes = save_dict["votes"]
+        self.timer = None if not save_dict["timer"] else int(save_dict["timer"])
+
+
+        return self
 
     def generate_quiz_message(self):
 
@@ -135,7 +171,7 @@ class Quiz:
 
         # Show the values of the various bars in the bar chart above the bars
         for bar in barchart:
-            height = round(bar.get_height(),2)
+            height = bar.get_height()
             plt.gca().text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.2, f"{height}%",
                            ha='center', color='white', fontsize=15)
 
@@ -165,7 +201,7 @@ class Poll(commands.Cog):
         if not self.datadir.exists():
             self.datadir.mkdir()
 
-        self.save_filepath = self.datadir.joinpath("saved_quizzes.pickle")
+        self.save_filepath = self.datadir.joinpath("saved_quizzes.backupjson")
 
         # This dictionary contains all the currently active quizzes
         self.quizzes = {}
@@ -184,8 +220,10 @@ class Poll(commands.Cog):
 
         '''Function to save a pickle object containing all the currently active quizzes'''
 
-        with open(self.save_filepath, 'wb') as file:
-            pickle.dump(self.quizzes, file)
+        save_dict = {message_id: self.quizzes[message_id].create_save_data() for message_id in self.quizzes}
+
+        with open(self.save_filepath, 'w') as file:
+            json.dump(save_dict,file)
 
     @commands.command("savequiz",aliases=("save-quiz","save_quiz","savequizzes","save-quizzes","save_quizzes"))
     @commands.has_permissions(administrator=True)
@@ -204,8 +242,11 @@ class Poll(commands.Cog):
         if not self.save_filepath.exists():
             self.save_quizzes()
             return
-        with open(self.save_filepath, 'rb') as file:
-            self.quizzes = pickle.load(file)
+        with open(self.save_filepath, 'r') as file:
+            json_data = json.load(file)
+
+        self.quizzes = {int(message_id): Quiz(None,None,None).load_from_save_data(json_data[message_id])
+                        for message_id in json_data}
 
     @commands.command("startquiz", aliases=("start-quiz","start_quiz","quiz","beginquiz","begin-quiz",
                                             "begin_quiz","launchquiz","launch_quiz","launch-quiz"))
@@ -227,6 +268,7 @@ class Poll(commands.Cog):
             quiz_filename = args[0]
             quiz_name = " ".join(args[1:])
             timer_value = None
+
             if len(quiz_name) == 0:
                 raise Exception
 
