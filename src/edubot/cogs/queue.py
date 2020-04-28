@@ -236,7 +236,7 @@ class ReviewQueue(Queue):
         oldQueue = []
         await ctx.channel.send('Parsing old messages...')
         async for message in ctx.channel.history(limit=None, oldest_first=True):
-            if message.content.casefold.startswith('ready'):
+            if message.content.casefold().startswith('ready'):
                 reacts = await message.reactions()
                 if '✅' in reacts:
                     await message.delete()
