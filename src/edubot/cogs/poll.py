@@ -48,7 +48,7 @@ class Quiz:
             self.question = str(json_data["question"])
             self.options = {i+1: str(option) for i,option in enumerate(json_data["options"])}
 
-            correct = json_data["correct"]
+            correct = str(json_data["correct"])
             self.correct_answer = None if len(correct) == 0 or correct in ("0","-1") else int(correct)
             self.votes = {i+1: [] for i in range(len(self.options))}
 
