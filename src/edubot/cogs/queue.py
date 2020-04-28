@@ -406,7 +406,8 @@ class QueueCog(commands.Cog):
     async def queueme(self, ctx, *args):
         """ Add me to the queue in this channel """
         qid = (ctx.guild.id, ctx.channel.id)
-        await ctx.send(Queue.addtoqueue(qid, ctx.author.id))
+        ctx.message.delete()
+        await ctx.send(Queue.addtoqueue(qid, ctx.author.id), delete_after=4)
 
     @commands.command(aliases=('ask',))
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
@@ -434,7 +435,8 @@ class QueueCog(commands.Cog):
     async def whereami(self, ctx):
         """ What's my position in the queue of this channel. """
         uid = ctx.author.id
-        await ctx.send(Queue.queues[(ctx.guild.id, ctx.channel.id)].whereis(uid))
+        await ctx.message.delete()
+        await ctx.send(Queue.queues[(ctx.guild.id, ctx.channel.id)].whereis(uid), delete_after=4)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
