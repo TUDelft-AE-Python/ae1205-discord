@@ -380,6 +380,15 @@ class QueueCog(commands.Cog):
         await ctx.send(Queue.makequeue(qid, qtype, ctx.guild.name, ctx.channel.name))
 
     @commands.command()
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.has_permissions(administrator=True)
+    async def fromhistory(self, ctx):
+        """ Populate the queue in this channel from normal ready messages in
+            the channel history. """
+        qid = (ctx.guild.id, ctx.channel.id)
+        await Queue.queues[qid].fromhistory(ctx)
+
+    @commands.command()
     @commands.check(Queue.qcheck)
     @commands.has_permissions(administrator=True)
     async def savequeue(self, ctx):
