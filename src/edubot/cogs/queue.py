@@ -86,7 +86,7 @@ class Queue:
                 qtype = qjson['qtype']
                 cls.makequeue(qid, qtype, qjson['guildname'], qjson['channame'])
                 cls.queues[qid].fromfile(qjson['qdata'])
-                return f'Loaded a {qtype} queue for <#{qid[1]}> with {cls.queues[qid].size()} entries.'
+                return f'Loaded a {qtype} queue for <#{qid[1]}> in {cls.queues[qid].guildname} with {cls.queues[qid].size()} entries.'
         except IOError:
             return 'No saved queue available for this channel.'
 
