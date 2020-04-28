@@ -86,7 +86,7 @@ class Queue:
                 qtype = qjson['qtype']
                 cls.makequeue(qid, qtype, qjson['guildname'], qjson['channame'])
                 cls.queues[qid].fromfile(qjson['qdata'])
-                return f'Loaded a {qtype} queue for <#{qid[1]}> with {cls.queues[qid].size()} entries.'
+                return f'Loaded a {qtype} queue for <#{qid[1]}> in {cls.queues[qid].guildname} with {cls.queues[qid].size()} entries.'
         except IOError:
             return 'No saved queue available for this channel.'
 
@@ -236,7 +236,9 @@ class ReviewQueue(Queue):
         oldQueue = []
         await ctx.channel.send('Parsing old messages...')
         async for message in ctx.channel.history(limit=None, oldest_first=True):
-            if message.content.casefold.startswith('ready'):
+            print(message.content.casefold())
+            if message.content.casefold().startswith('ready'):
+                
                 reacts = await message.reactions()
                 if '✅' in reacts:
                     await message.delete()
@@ -362,7 +364,7 @@ class QueueCog(commands.Cog):
     async def takenext(self, ctx):
         """ Take the next in line from the queue. """
         qid = (ctx.guild.id, ctx.channel.id)
-        await self.queues[qid].takenext(ctx)
+        await Queue.queues[qid].takenext(ctx)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
@@ -370,7 +372,7 @@ class QueueCog(commands.Cog):
     async def putback(self, ctx):
         ''' Put the student you currently have in your voice channel back in the queue. '''
         qid = (ctx.guild.id, ctx.channel.id)
-        await self.queues[qid].putback(ctx)
+        await Queue.queues[qid].putback(ctx)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -378,6 +380,15 @@ class QueueCog(commands.Cog):
         """ Make a queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.send(Queue.makequeue(qid, qtype, ctx.guild.name, ctx.channel.name))
+
+    @commands.command()
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.has_permissions(administrator=True)
+    async def fromhistory(self, ctx):
+        """ Populate the queue in this channel from normal ready messages in
+            the channel history. """
+        qid = (ctx.guild.id, ctx.channel.id)
+        await Queue.queues[qid].fromhistory(ctx)
 
     @commands.command()
     @commands.check(Queue.qcheck)
@@ -437,4 +448,4 @@ class QueueCog(commands.Cog):
             await ctx.send(f'There are {size} entries in the queue of <#{ctx.channel.id}>')
         else:
             # Member is passed, add him/her to the queue
-            await ctx.send(Queue.addtoqueue(qid, member))
+            await ctx.send(Queue.addtoqueue(qid, member.id))
