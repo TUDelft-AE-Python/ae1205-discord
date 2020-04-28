@@ -232,27 +232,38 @@ class ReviewQueue(Queue):
             return f'You are not in the queue in this channel <@{uid}>!'
 
     async def fromhistory(self, ctx):
-        # Front-fill the queue with the channel message history
-        oldQueue = []
+        # Fill queue from message history, and clean channel
+        deleted = 0
+        skipped = 0
+        queued  = 0
         await ctx.channel.send('Parsing old messages...')
         async for message in ctx.channel.history(limit=None, oldest_first=True):
             print(message.content.casefold())
             if message.content.casefold().startswith('ready'):
-                
-                reacts = await message.reactions()
-                if '✅' in reacts:
+                checked = False
+                for reaction in message.reactions:
+                    if reaction.emoji == '✅':
+                        checked = True
+                if checked:
                     await message.delete()
+                    deleted += 1
                 else:
-                    oldQueue.append(message.author)
+                     # avoid queueing someone twice
+                    self.add(message.author.id)
+                    queued += 1
+            # clean up old commands
+            elif message.content.startswith('!'):
+                await message.delete()
+                deleted += 1
             # if not student saying ready, check if TA/Tutor message
-            elif len(message.author.roles) == 2:
+            elif len(message.author.roles) == 2 and not message.author.bot:
+                skipped += 1
                 pass
             # not TA/Tutor, not student getting ready. Ergo clutter
             else:
                 await message.delete()
-        # if between !makequeue and !fromhistory people said !queueme, this
-        # puts them at the back of the queue
-        self.queue = oldQueue + self.queue
+                deleted += 1
+        await ctx.channel.send(f'Messages..  ..deleted: {deleted} ..queued: {queued} ..skipped: {skipped}',delete_after=2)
 
 
 class QuestionQueue(Queue):
