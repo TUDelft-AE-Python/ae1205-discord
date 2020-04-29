@@ -267,9 +267,9 @@ class QuestionQueue(Queue):
         if not self.queue:
             return 'There are no questions in the queue!'
         if idx is None:
-            msg = 'The following questions can be followed:\n'
+            msg = '**The following questions can be followed:**\n\n'
             for qidx, qstn in self.queue.items():
-                msg = msg + f'{qidx:02d}: {qstn.qmsg}' + \
+                msg = msg + f'**- {qidx:02d}:** {qstn.qmsg}' + \
                     (' (already following)\n' if member in qstn.followers else '\n')
             return msg
 
@@ -289,26 +289,30 @@ class QuestionQueue(Queue):
 
     async def answer(self, ctx, idx, answer=None):
         if idx not in self.queue:
-            await ctx.send(f'<@{ctx.author.id}>: No question in the queue with index {idx}!')
+            await ctx.send(f'<@{ctx.author.id}>: No question in the queue with index {idx}!', delete_after=20)
 
         elif answer:
             # This is a text-based answer
             qstn = self.queue.pop(idx)
-            msg = f'Question {idx} has been answered ' + \
-                ', '.join([f'<@{uid}>' for uid in qstn.followers]) + '!\n\n' + \
-                    'Question: ' + qstn.qmsg + '\n' + 'Answer: ' + answer
-            await ctx.send(msg)
+            msg = f'**Question:** {qstn.qmsg}\n\n**Answer:** {answer}\n\n' + \
+                  f'**Answered by: **<@{ctx.author.id}>\n\n**Followers:** ' + \
+                  ', '.join([f'<@{uid}>' for uid in qstn.followers])
+            embed = discord.Embed(title=f"Answer to question {idx}:",
+                                  description=msg, colour=0x41f109)
+            await ctx.channel.send(embed=embed)
         else:
             # The question will be answered in a voice chat
             cv = getvoicechan(ctx.author)
             if cv is None:
-                await ctx.send(f'<@{ctx.author.id}>: Please select a voice channel first where you want to interview the student!')
+                await ctx.send(f'<@{ctx.author.id}>: Please select a voice channel first where you want to interview the student!', delete_after=20)
                 return
 
             qstn = self.queue.pop(idx)
             msg = f'Question {idx} will be answered in voice channel <#{cv.id}> by <@{ctx.author.id}> for ' + \
                 ', '.join([f'<@{uid}>' for uid in qstn.followers]) + '!\n'
-            await ctx.send(msg)
+            embed = discord.Embed(title=f"Answer to question {idx}:",
+                                  description=msg, colour=0x41f109)
+            await ctx.channel.send(embed=embed)
 
     def whereis(self, uid):
         ''' Find questions followed by user with id 'uid' in this queue. '''
@@ -444,6 +448,7 @@ class QueueCog(commands.Cog):
         '''
         qid = (ctx.guild.id, ctx.channel.id)
         ansstring = ' '.join(answer)
+        await ctx.message.delete()
         await Queue.queues[qid].answer(ctx, idx, ansstring)
 
     @commands.command()
@@ -455,8 +460,15 @@ class QueueCog(commands.Cog):
             - idx: The index of the question to follow (optional: if no index
               is given a list of questions is printed).
         '''
+        await ctx.message.delete()
         qid = (ctx.guild.id, ctx.channel.id)
-        await ctx.send(Queue.queues[qid].follow(ctx.author.id, idx))
+        text = Queue.queues[qid].follow(ctx.author.id, idx)
+        if idx is not None:
+            await ctx.send(text, delete_after=30)
+        else:
+            embed = discord.Embed(title="Questions in this queue:",
+                                  description=text, colour=0x41f109)
+            await ctx.channel.send(embed=embed, delete_after=30)
 
     @commands.command()
     @commands.check(Queue.qcheck)
