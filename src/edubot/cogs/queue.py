@@ -113,6 +113,13 @@ class Queue:
             return f'Added <@{uid}> to the queue at position {len(self.queue)}'
         self.queue.append(uid)
 
+    def remove(self, uid):
+        ''' Remove user with uid from this queue. '''
+        if self.queue.pop(uid, None) is None:
+            return f'<@{uid} is not listed in the queue!'
+        else:
+            return f'Removed <@{uid} from the queue.'
+
     def fromfile(self, qdata):
         ''' Build queue from data out of json file. '''
         self.queue = qdata
@@ -373,6 +380,15 @@ class QueueCog(commands.Cog):
         qid = (ctx.guild.id, ctx.channel.id)
         ctx.message.delete()
         await ctx.send(Queue.queues[qid].add(qid, ctx.author.id), delete_after=4)
+
+    @commands.command()
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    async def removeme(self, ctx, *args):
+        """ Remove me from the queue in this channel """
+        qid = (ctx.guild.id, ctx.channel.id)
+        ctx.message.delete()
+        await ctx.send(Queue.queues[qid].remove(qid, ctx.author.id), delete_after=4)
+
 
     @commands.command(aliases=('ask',))
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
