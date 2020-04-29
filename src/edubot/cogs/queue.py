@@ -27,6 +27,10 @@ def getvoicechan(member):
     '''
     return member.voice.channel if member and member.voice else None
 
+def readymovevoice(member):
+    ''' Check if this member is ready to be moved to a discussion channel. '''
+    return (getvoicechan(member) != None) and not member.voice.self_stream \
+        and not member.voice.afk
 
 class Queue:
     ''' Base queue implementation. '''
@@ -173,7 +177,7 @@ class ReviewQueue(Queue):
         # Get the next student in the queue
         member = await ctx.guild.fetch_member(self.queue.pop(0))
         unready = []
-        while self.queue and not getvoicechan(member):
+        while self.queue and not readymovevoice(member):
             await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
                               'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
             # Store the studentID to place them back in the queue, and get the next one to try
