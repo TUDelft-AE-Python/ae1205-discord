@@ -249,7 +249,12 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def start_quiz(self, ctx, fname : str, timeout : int = None):
 
-        '''Discord command to create a Quiz object and represent it in Discord'''
+        ''' Discord command to start a quiz.
+
+            Arguments:
+            - fname: The JSON file containing the quiz
+            - timeout: Timeout in seconds for each question (optional)
+        '''
 
         # Save the channel in which the message was sent
         quiz_channel = ctx.channel
@@ -313,9 +318,8 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def finish_quiz(self,ctx,*args):
-
         """
-        Discord command to end a quiz and publish its results using the Quiz create_histogram function.
+        End a quiz and publish its results using a histogram.
         It sends the histogram to the channel where the quiz resides as well as the people who started
         and ended the quiz.
         """
@@ -439,12 +443,11 @@ class Poll(commands.Cog):
 
         await ctx.message.delete()
 
-    @commands.command("view-quizzes", aliases=("viewquizzes", "view_quizzes", "view_quiz", "viewquiz", "view-quiz"))
+    @commands.command("viewquiz", aliases=("viewquizzes", "view_quizzes", "view_quiz", "view-quizzes", "view-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def view_quizzes(self,ctx):
-
-        '''Function to list all stored json files as well as all active quizzes'''
+        ''' List all stored json files as well as all active quizzes. '''
 
         json_files = [path.name for path in list(self.datadir.rglob("*.json"))]
         currently_active = [self.quizzes[message_id].name for message_id in self.quizzes]
@@ -461,7 +464,7 @@ class Poll(commands.Cog):
             await ctx.channel.send(embed=embed, delete_after=30)
         await ctx.message.delete()
 
-    @commands.command("inspect_quiz", aliases=("inspectquiz","inspect-quiz"))
+    @commands.command("inspectquiz", aliases=("inspect_quiz", "inspect-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def inspect_quiz_json(self,ctx,*args):
@@ -480,7 +483,7 @@ class Poll(commands.Cog):
                                                         file=discord.File(filepath))
         await ctx.message.delete()
 
-    @commands.command("delete-quiz", aliases=("deletequiz","delete_quiz","removequiz","remove-quiz","remove_quiz"))
+    @commands.command("delquiz", aliases=("delete-quiz", "deletequiz", "delete_quiz", "removequiz", "remove-quiz", "remove_quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def remove_quiz(self,ctx,*args):

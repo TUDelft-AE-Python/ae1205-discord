@@ -341,6 +341,7 @@ class QueueCog(commands.Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def loadallqueues(self, ctx):
+        ''' Load all queues that were previously stored to disk. '''
         await ctx.send(Queue.loadall())
 
     @commands.command()
@@ -357,8 +358,10 @@ class QueueCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def putback(self, ctx, pos : int = 10):
         ''' Put the student you currently have in your voice channel back in the queue.
-            Optional argument: pos -> the position in the queue to put the student.
-            Default position is 10. '''
+
+            Arguments:
+            - pos: The position in the queue to put the student. (optional)
+              Default position is 10. '''
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         await Queue.queues[qid].putback(ctx, pos)
@@ -366,7 +369,11 @@ class QueueCog(commands.Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def makequeue(self, ctx, qtype='Review'):
-        """ Make a queue in this channel. """
+        """ Make a queue in this channel. 
+        
+            Arguments:
+            - qtype: The type of queue to create. (optional, default=Review)
+        """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.send(Queue.makequeue(qid, qtype, ctx.guild.name, ctx.channel.name))
 
@@ -374,17 +381,19 @@ class QueueCog(commands.Cog):
     @commands.check(Queue.qcheck)
     @commands.has_permissions(administrator=True)
     async def savequeue(self, ctx):
+        """ Save the queue in this channel. """
         Queue.queues[(ctx.guild.id, ctx.channel.id)].save()
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def loadqueue(self, ctx):
+        """ Load this channel's queue from disk. """
         await ctx.send(Queue.load((ctx.guild.id, ctx.channel.id)))
 
     @commands.command(aliases=('ready', 'done'))
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     async def queueme(self, ctx, *args):
-        """ Add me to the queue in this channel """
+        """ Add me to the queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         await ctx.send(Queue.queues[qid].add(ctx.author.id), delete_after=4)
@@ -392,7 +401,7 @@ class QueueCog(commands.Cog):
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     async def removeme(self, ctx, *args):
-        """ Remove me from the queue in this channel """
+        """ Remove me from the queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         await ctx.send(Queue.queues[qid].remove(ctx.author.id), delete_after=4)
@@ -401,7 +410,11 @@ class QueueCog(commands.Cog):
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def remove(self, ctx, member: discord.Member):
-        """ Remove me from the queue in this channel """
+        """ Remove user from the queue in this channel. 
+        
+            Arguments:
+            - @user: Mention the user to remove from the queue.
+        """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         await ctx.send(Queue.queues[qid].remove(member.id), delete_after=4)
@@ -409,6 +422,11 @@ class QueueCog(commands.Cog):
     @commands.command(aliases=('ask',))
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
     async def question(self, ctx, *args):
+        """ Ask a question in this channel.
+        
+            Arguments:
+            - question: The question you want to ask.
+        """
         qid = (ctx.guild.id, ctx.channel.id)
         qmsg = ' '.join(args)
         await ctx.send(Queue.queues[qid].add(ctx.author.id, qmsg))
@@ -416,7 +434,13 @@ class QueueCog(commands.Cog):
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
     async def answer(self, ctx, idx: int, *answer):
-        ''' Answer a question. '''
+        ''' Answer a question.
+        
+            Arguments:
+            - idx: The index number of the question you want to answer
+            - answer: The answer to the question (optional: if no answer is
+              given, followers are invited to your voice channel)
+        '''
         qid = (ctx.guild.id, ctx.channel.id)
         ansstring = ' '.join(answer)
         await Queue.queues[qid].answer(ctx, idx, ansstring)
@@ -424,7 +448,12 @@ class QueueCog(commands.Cog):
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
     async def follow(self, ctx, idx: int = None):
-        ''' Follow a question. '''
+        ''' Follow a question.
+        
+            Arguments:
+            - idx: The index of the question to follow (optional: if no index
+              is given a list of questions is printed).
+        '''
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.send(Queue.queues[qid].follow(ctx.author.id, idx))
 
@@ -440,7 +469,12 @@ class QueueCog(commands.Cog):
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def queue(self, ctx, *, member: discord.Member = None):
-        """ Admin command: check and add to the queue. """
+        """ Admin command: check and add to the queue.
+        
+            Arguments:
+            - @user mention: Mention the user you want to add to the queue (optional:
+              if no user is given, the length of the queue is returned).
+        """
         qid = (ctx.guild.id, ctx.channel.id)
         if member is None:
             # Only respond with the length of the queue
