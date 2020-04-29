@@ -19,8 +19,8 @@ class Quiz:
     Also contains information about the quiz message and creator for use by the Discord API
     """
 
-    def __init__(self,name,json_file, owner):
-        self.name = name
+    def __init__(self, json_file, owner):
+        self.name = 'Quiz'
         self.filename = json_file
         self.owner = owner
 
@@ -38,24 +38,20 @@ class Quiz:
                               (":one:",":two:",":three:",":four:",":five:",":six:",":seven:",":eight:",":nine:")]
 
     def load_data(self):
-
         '''Function for loading in json files containing the quiz information'''
         try:
             with open(self.filename, "r") as file:
                 json_data = json.load(file)
-
+            self.name = json_data.get('name', 'Quiz')
             self.question = str(json_data["question"])
             self.options = {i+1: str(option) for i,option in enumerate(json_data["options"])}
 
-            correct = str(json_data["correct"])
-            self.correct_answer = None if len(correct) == 0 or correct in ("0","-1") else int(correct)
+            self.correct_answer = json_data.get('correct', None)
             self.votes = {i+1: [] for i in range(len(self.options))}
 
             # When the  file is read in, the timer specified there is used as a baseline. !makequiz and !startquiz
             # Can overwrite this value
-            if "timer" in json_data:
-                timer_val = str(json_data["timer"])
-                self.timer = None if len(timer_val) == 0 or timer_val in ("0","-1") else int(timer_val)
+            self.timer = json_data.get('timer', None)
 
             succesful = True
 
@@ -230,7 +226,7 @@ class Poll(commands.Cog):
     async def save_quiz(self,ctx):
         self.save_quizzes()
         await ctx.channel.send(f"<@{ctx.author.id}> Currently active quizzes saved!",
-                               delete_after=3)
+                               delete_after=20)
         await ctx.message.delete()
 
     def load_quizzes(self):
@@ -251,7 +247,7 @@ class Poll(commands.Cog):
                                             "begin_quiz","launchquiz","launch_quiz","launch-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
-    async def start_quiz(self,ctx,*args):
+    async def start_quiz(self, ctx, fname : str, timeout : int = None):
 
         '''Discord command to create a Quiz object and represent it in Discord'''
 
@@ -263,56 +259,34 @@ class Poll(commands.Cog):
         # Delete the message containing the command
         await ctx.message.delete()
 
-        try:
-            quiz_filename = args[0]
-            quiz_name = " ".join(args[1:])
-            timer_value = None
-
-            if len(quiz_name) == 0:
-                raise Exception
-
-            # A timer value has also been specified, which must be extracted before proceeding.
-            if "timer=" in quiz_name.lower():
-                timer_value = int(args[-1].lower().strip("timer="))
-                timer_value = timer_value if timer_value > 0 else None
-                quiz_name = " ".join(args[1:-1])
-
-        except Exception:
-            await ctx.channel.send(
-                f"<@{ctx.author.id}> Command used incorrectly! Please provide the filename first, then the quiz name. "
-                f"Optionally, a time limit can be specified using timer=xx",
-                delete_after=3
-            )
-            return
-
         # Add a .json extension if it is not present
-        if not ".json" in quiz_filename:
-            quiz_filename += ".json"
+        if ".json" not in fname:
+            fname += ".json"
 
-        quiz_filepath = self.datadir.joinpath(quiz_filename)
+        quiz_filepath = self.datadir.joinpath(fname)
 
         # Check if the filename specified actually exists
         if not quiz_filepath.exists():
             await ctx.channel.send(
                 f"<@{ctx.author.id}> The filename provided does not seem to exist, please check spelling and try again.",
-                delete_after=3
+                delete_after=20
             )
             return
 
         # Create the new quiz
-        was_succesful, new_quiz = Quiz(quiz_name,quiz_filepath,quiz_creator).load_data()
+        was_succesful, new_quiz = Quiz(quiz_filepath, quiz_creator).load_data()
 
         # Abort if the data reading has failed. If the bot has been properly configured, this means that the json
         # formatting is wrong.
         if not was_succesful:
             await ctx.channel.send(
                 f"<@{ctx.author.id}> The json quiz file has been improperly formatted!",
-                delete_after=5
+                delete_after=20
             )
             return
 
-        if timer_value:
-            new_quiz.timer = timer_value
+        if timeout:
+            new_quiz.timer = timeout
 
         # Create the message belonging to the quiz and give it a green coloured embed
         title, description, emojis = new_quiz.generate_quiz_message()
@@ -361,7 +335,7 @@ class Poll(commands.Cog):
             except Exception:
                 await ctx.channel.send(
                     f"<@{ctx.author.id}> That quiz does not exist, please check the spelling of the name you provided!",
-                    delete_after=3
+                    delete_after=20
                 )
                 return
 
@@ -424,7 +398,7 @@ class Poll(commands.Cog):
 
         if len(args) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> No arguments were given!",
-                                   delete_after=3)
+                                   delete_after=20)
             await ctx.message.delete()
             return
 
@@ -443,7 +417,7 @@ class Poll(commands.Cog):
             await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Either attach the json file to "
                                    f"the message and provide the filename as argument or provide filename, question, "
                                    f"answers and correct response as separate arguments.",
-                                   delete_after=6)
+                                   delete_after=20)
             await ctx.message.delete()
             return
         timer_value = ''
@@ -481,7 +455,7 @@ class Poll(commands.Cog):
         # Check if the string is empty
         if len(to_send.strip()) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> There are no json files stored and no quizzes active.",
-                                   delete_after=4)
+                                   delete_after=20)
         else:
             embed = discord.Embed(title="Quiz JSON files and active quizzes", description=to_send, colour=0x41f109)
             await ctx.channel.send(embed=embed, delete_after=30)
@@ -498,10 +472,10 @@ class Poll(commands.Cog):
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
             await ctx.channel.send(f"<@{ctx.author.id}> That file does not exist!",
-                                   delete_after=4)
+                                   delete_after=20)
         else:
             await ctx.channel.send(f"<@{ctx.author.id}> File will be sent via private message.",
-                                   delete_after=4)
+                                   delete_after=20)
             await self.bot.get_user(ctx.author.id).send(f"<@{ctx.author.id}> Here is the file that you requested.",
                                                         file=discord.File(filepath))
         await ctx.message.delete()
@@ -517,11 +491,11 @@ class Poll(commands.Cog):
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
             await ctx.channel.send(f"<@{ctx.author.id}> That file does not exist!",
-                                   delete_after=4)
+                                   delete_after=20)
         else:
             filepath.unlink()
             await ctx.channel.send(f"<@{ctx.author.id}> File deleted!",
-                                   delete_after=3)
+                                   delete_after=20)
         await ctx.message.delete()
 
 
