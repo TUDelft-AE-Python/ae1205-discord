@@ -61,6 +61,8 @@ class Queue:
     @classmethod
     async def qcheck(cls, ctx, qtype=''):
         ''' Decorator function to check existence and type of queue. '''
+        if 'help' in ctx.message.content:
+            return True
         queue = Queue.queues.get((ctx.guild.id, ctx.channel.id), None)
         if queue is None:
             await ctx.send('This channel doesn\'t have a queue!')
