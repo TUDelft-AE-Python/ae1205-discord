@@ -29,6 +29,7 @@ def getvoicechan(member):
 
 
 class Queue:
+    ''' Base queue implementation. '''
     # Get reference to bot in a static
     bot = None
     datadir = None
@@ -37,6 +38,7 @@ class Queue:
 
     @classmethod
     def saveall(cls):
+        ''' Save all known queues. '''
         print('Saving all queues')
         for qid, queue in cls.queues.items():
             print('Saving queue', qid)
@@ -44,6 +46,7 @@ class Queue:
 
     @classmethod
     def loadall(cls):
+        ''' Load all queue files from disk. '''
         msgs = []
         for qfile in cls.datadir.rglob('*.json'):
             qidstr = qfile.name.replace('.json', '').split('-')
@@ -53,6 +56,7 @@ class Queue:
 
     @classmethod
     async def qcheck(cls, ctx, qtype=''):
+        ''' Decorator function to check existence and type of queue. '''
         queue = Queue.queues.get((ctx.guild.id, ctx.channel.id), None)
         if queue is None:
             await ctx.send('This channel doesn\'t have a queue!')
@@ -64,6 +68,7 @@ class Queue:
 
     @classmethod
     def makequeue(cls, qid, qtype, guildname, channame):
+        ''' Make a new queue, with requested type. '''
         if qid in cls.queues:
             return 'This channel already has a queue!'
         else:
@@ -96,17 +101,25 @@ class Queue:
         ''' Return the size of this queue. '''
         return len(self.queue)
 
-    def add(self, *args):
-        ''' Add an entry to the queue. '''
-        return ''
+    def add(self, uid):
+        ''' Add user with uid to this queue. '''
+        try:
+            pos = self.queue.index(uid)
+            return f'You are already in the queue <@{uid}>! ' + \
+                (f'There are still {pos} people waiting in front of you.' if pos else
+                    'You are next in line!')
+        except ValueError:
+            self.queue.append(uid)
+            return f'Added <@{uid}> to the queue at position {len(self.queue)}'
+        self.queue.append(uid)
 
-    def fromfile(self, fin):
+    def fromfile(self, qdata):
         ''' Build queue from data out of json file. '''
-        pass
+        self.queue = qdata
 
-    def tofile(self, fout):
+    def tofile(self):
         ''' Return queue data for storage in json file. '''
-        pass
+        return self.queue
 
     def save(self):
         ''' Save queue object to file. '''
@@ -120,7 +133,14 @@ class Queue:
             json.dump(qjson, fout)
 
     def whereis(self, uid):
-        pass
+        ''' Find user with id 'uid' in this queue. '''
+        try:
+            pos = self.queue.index(uid)
+            return f'Hi <@{uid}>! ' + \
+                (f'There are still {pos} people waiting in front of you.' if pos else
+                 'You are next in line!')
+        except ValueError:
+            return f'You are not in the queue in this channel <@{uid}>!'
 
 
 class ReviewQueue(Queue):
@@ -129,26 +149,6 @@ class ReviewQueue(Queue):
     def __init__(self, qid, guildname, channame):
         super().__init__(qid, guildname, channame)
         self.assigned = dict()
-
-    def fromfile(self, qdata):
-        ''' Build queue from data out of json file. '''
-        self.queue = qdata
-
-    def tofile(self):
-        ''' Return queue data for storage in json file. '''
-        return self.queue
-
-    def add(self, uid):
-        ''' Add user with uid to this queue. '''
-        try:
-            pos = self.queue.index(uid)
-            return f'You are already in the queue <@{uid}>! ' + \
-                (f'There are still {pos} people waiting in front of you.' if pos else
-                    'You are next in line!')
-        except ValueError:
-            self.queue.append(uid)
-            return f'Added <@{uid}> to the queue at position {len(self.queue)}'
-        self.queue.append(uid)
 
     async def takenext(self, ctx):
         ''' Take the next student from the queue. '''
@@ -220,38 +220,6 @@ class ReviewQueue(Queue):
             await member.edit(voice_channel=voicechan)
             await self.bot.dm(member, 'You were moved back into the queue, probably because you didn\'t respond.')
 
-    def whereis(self, uid):
-        try:
-            pos = self.queue.index(uid)
-            return f'Hi <@{uid}>! ' + \
-                (f'There are still {pos} people waiting in front of you.' if pos else
-                 'You are next in line!')
-        except ValueError:
-            return f'You are not in the queue in this channel <@{uid}>!'
-
-    async def fromhistory(self, ctx):
-        # Front-fill the queue with the channel message history
-        oldQueue = []
-        await ctx.channel.send('Parsing old messages...')
-        async for message in ctx.channel.history(limit=None, oldest_first=True):
-            print(message.content.casefold())
-            if message.content.casefold().startswith('ready'):
-                
-                reacts = await message.reactions()
-                if '✅' in reacts:
-                    await message.delete()
-                else:
-                    oldQueue.append(message.author)
-            # if not student saying ready, check if TA/Tutor message
-            elif len(message.author.roles) == 2:
-                pass
-            # not TA/Tutor, not student getting ready. Ergo clutter
-            else:
-                await message.delete()
-        # if between !makequeue and !fromhistory people said !queueme, this
-        # puts them at the back of the queue
-        self.queue = oldQueue + self.queue
-
 
 class QuestionQueue(Queue):
     qtype = 'Question'
@@ -298,6 +266,7 @@ class QuestionQueue(Queue):
         return f'You are now following question {idx} <@{member}>!'
 
     def add(self, askedby, qmsg):
+        ''' Add question to this queue. '''
         self.maxidx += 1
         self.queue[self.maxidx] = QuestionQueue.Question(askedby, qmsg)
         return f'<@{askedby}>: Your question is added at position {len(self.queue)} with index {self.maxidx}'
@@ -326,6 +295,7 @@ class QuestionQueue(Queue):
             await ctx.send(msg)
 
     def whereis(self, uid):
+        ''' Find questions followed by user with id 'uid' in this queue. '''
         qlst = []
         for pos, (idx, qstn) in enumerate(self.queue.items()):
             if uid in qstn.followers:
@@ -384,15 +354,6 @@ class QueueCog(commands.Cog):
         """ Make a queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.send(Queue.makequeue(qid, qtype, ctx.guild.name, ctx.channel.name))
-
-    # @commands.command()
-    # @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
-    # @commands.has_permissions(administrator=True)
-    # async def fromhistory(self, ctx):
-    #     """ Populate the queue in this channel from normal ready messages in
-    #         the channel history. """
-    #     qid = (ctx.guild.id, ctx.channel.id)
-    #     await Queue.queues[qid].fromhistory(ctx)
 
     @commands.command()
     @commands.check(Queue.qcheck)
