@@ -168,7 +168,7 @@ class ReviewQueue(Queue):
             await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
                               'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
             # Store the studentID to place them back in the queue, and get the next one to try
-            unready.append(member)
+            unready.append(member.id)
             if self.queue:
                 member = await ctx.guild.fetch_member(self.queue.pop(0))
             else:
