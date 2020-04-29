@@ -232,7 +232,8 @@ class ReviewQueue(Queue):
         else:
             self.queue.insert(pos, uid)
             member = await ctx.guild.fetch_member(uid)
-            await member.edit(voice_channel=voicechan)
+            if readymovevoice(member):
+                await member.edit(voice_channel=voicechan)
             await self.bot.dm(member, 'You were moved back into the queue, probably because you didn\'t respond.')
 
 
