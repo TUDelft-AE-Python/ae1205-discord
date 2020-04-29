@@ -145,7 +145,7 @@ class Queue:
                          guildname=self.guildname,
                          channame=self.channame,
                          qdata=self.tofile())
-            json.dump(qjson, fout)
+            json.dump(qjson, fout, indent=4)
 
     def whereis(self, uid):
         ''' Find user with id 'uid' in this queue. '''
