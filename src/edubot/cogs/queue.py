@@ -121,7 +121,7 @@ class Queue:
         except ValueError:
             self.queue.append(uid)
             msg = f'Added <@{uid}> to the queue at position {len(self.queue)}'
-        await ctx.send(msg, delete_after=4)
+        await ctx.send(msg, delete_after=10)
 
     def remove(self, uid):
         ''' Remove user with uid from this queue. '''
@@ -174,10 +174,10 @@ class ReviewQueue(Queue):
         # Get the voice channel of the caller
         cv = getvoicechan(ctx.author)
         if cv is None:
-            await ctx.send(f'<@{ctx.author.id}>: Please select a voice channel first where you want to interview the student!')
+            await ctx.send(f'<@{ctx.author.id}>: Please select a voice channel first where you want to interview the student!', delete_after=10)
             return
         if not self.queue:
-            await ctx.send(f'<@{ctx.author.id}>: Hurray, the queue is empty!')
+            await ctx.send(f'<@{ctx.author.id}>: Hurray, the queue is empty!', delete_after=20)
             return
 
         # Get the next student in the queue
@@ -191,7 +191,7 @@ class ReviewQueue(Queue):
             if self.queue:
                 member = await ctx.guild.fetch_member(self.queue.pop(0))
             else:
-                await ctx.send(f'<@{ctx.author.id}> : There\'s noone in the queue who is ready (in a voice lounge)!')
+                await ctx.send(f'<@{ctx.author.id}> : There\'s noone in the queue who is ready (in a voice lounge)!', delete_after=10)
                 self.queue = unready
                 return
         # Placement of unready depends on the length of the queue left. Priority goes
@@ -232,7 +232,7 @@ class ReviewQueue(Queue):
         uid, qid, voicechan = self.assigned.get(
             ctx.author.id, (False, False, False))
         if not uid:
-            await ctx.send(f'<@{ctx.author.id}>: You don\'t have a student assigned to you yet!')
+            await ctx.send(f'<@{ctx.author.id}>: You don\'t have a student assigned to you yet!', delete_after=10)
         else:
             self.queue.insert(pos, uid)
             member = await ctx.guild.fetch_member(uid)
@@ -308,7 +308,7 @@ class QuestionQueue(Queue):
         disc_msg = await ctx.send(embed=embed)
         self.queue[self.maxidx] = QuestionQueue.Question(askedby, qmsg, disc_msg)
         msg = f'<@{askedby}>: Your question is added at position {len(self.queue)} with index {self.maxidx}'
-        await ctx.send(msg, delete_after=4)
+        await ctx.send(msg, delete_after=10)
 
     async def answer(self, ctx, idx, answer=None):
         if idx not in self.queue:
@@ -333,7 +333,7 @@ class QuestionQueue(Queue):
 
             # Say something nice if student answers his/her own question
             if qstn.followers[0] == ctx.author.id:
-                await ctx.send(f'Well done <@{ctx.author.id}>! You solved your own question!')
+                await ctx.send(f'Well done <@{ctx.author.id}>! You solved your own question!', delete_after=20)
 
         else:
             # The question will be answered in a voice chat
@@ -444,6 +444,7 @@ class QueueCog(commands.Cog):
             - qtype: The type of queue to create. (optional, default=Review)
         """
         qid = (ctx.guild.id, ctx.channel.id)
+        await ctx.message.delete()
         await ctx.send(Queue.makequeue(qid, qtype, ctx.guild.name, ctx.channel.name))
 
     @commands.command()
@@ -451,6 +452,7 @@ class QueueCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def savequeue(self, ctx):
         """ Save the queue in this channel. """
+        await ctx.message.delete()
         Queue.queues[(ctx.guild.id, ctx.channel.id)].save()
 
     @commands.command()
@@ -472,7 +474,7 @@ class QueueCog(commands.Cog):
         """ Remove me from the queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
-        await ctx.send(Queue.queues[qid].remove(ctx.author.id), delete_after=4)
+        await ctx.send(Queue.queues[qid].remove(ctx.author.id), delete_after=10)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
@@ -485,7 +487,7 @@ class QueueCog(commands.Cog):
         """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
-        await ctx.send(Queue.queues[qid].remove(member.id), delete_after=4)
+        await ctx.send(Queue.queues[qid].remove(member.id), delete_after=10)
 
     @commands.command('ask', aliases=('question',))
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
@@ -546,7 +548,7 @@ class QueueCog(commands.Cog):
         """ What's my position in the queue of this channel. """
         uid = ctx.author.id
         await ctx.message.delete()
-        await ctx.send(Queue.queues[(ctx.guild.id, ctx.channel.id)].whereis(uid), delete_after=4)
+        await ctx.send(Queue.queues[(ctx.guild.id, ctx.channel.id)].whereis(uid), delete_after=10)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
@@ -559,10 +561,11 @@ class QueueCog(commands.Cog):
               if no user is given, the length of the queue is returned).
         """
         qid = (ctx.guild.id, ctx.channel.id)
+        await ctx.message.delete()
         if member is None:
             # Only respond with the length of the queue
             size = Queue.queues[qid].size()
-            await ctx.send(f'There are {size} entries in the queue of <#{ctx.channel.id}>')
+            await ctx.send(f'There are {size} entries in the queue of <#{ctx.channel.id}>', delete_after=10)
         else:
             # Member is passed, add him/her to the queue
             await Queue.queues[qid].add(ctx, member.id)
