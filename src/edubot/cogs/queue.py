@@ -248,6 +248,7 @@ class QuestionQueue(Queue):
     def __init__(self, qid, guildname, channame):
         super().__init__(qid, guildname, channame)
         self.queue = OrderedDict()
+        self.answers = dict()
         self.maxidx = 0
 
     def fromfile(self, qdata):
@@ -299,7 +300,9 @@ class QuestionQueue(Queue):
                   ', '.join([f'<@{uid}>' for uid in qstn.followers])
             embed = discord.Embed(title=f"Answer to question {idx}:",
                                   description=msg, colour=0x41f109)
-            await ctx.channel.send(embed=embed)
+            # Store the answer message object for possible later amendments
+            self.answers[idx] = await ctx.channel.send(embed=embed)
+
         else:
             # The question will be answered in a voice chat
             cv = getvoicechan(ctx.author)
@@ -313,6 +316,28 @@ class QuestionQueue(Queue):
             embed = discord.Embed(title=f"Answer to question {idx}:",
                                   description=msg, colour=0x41f109)
             await ctx.channel.send(embed=embed)
+
+    async def amend(self, ctx, idx, amendment=''):
+        ''' Amend the answer to question with index idx. '''
+        msg = self.answers.get(idx, None)
+        if msg is None:
+            await ctx.send(f'<@{ctx.author.id}>: No answered question found with index {idx}', delete_after=20)
+            return
+
+        embed = msg.embeds[0]
+        title = embed.title
+        colour = embed.colour
+        content = embed.description
+        inspos = content.find('**Answered by: **')
+        # Delete the original answer
+        await msg.delete()
+        # and create an amended one
+        newcontent = content[:inspos] + f'**Amendment from <@{ctx.author.id}>: ** {amendment}\n\n' + content[inspos:]
+        newembed = discord.Embed(title=title,
+                                 description=newcontent, colour=colour)
+        self.answers[idx] = await ctx.channel.send(embed=newembed)
+
+
 
     def whereis(self, uid):
         ''' Find questions followed by user with id 'uid' in this queue. '''
@@ -424,7 +449,7 @@ class QueueCog(commands.Cog):
         await ctx.message.delete()
         await ctx.send(Queue.queues[qid].remove(member.id), delete_after=4)
 
-    @commands.command(aliases=('ask',))
+    @commands.command('ask', aliases=('question',))
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
     async def question(self, ctx, *args):
         """ Ask a question in this channel.
@@ -450,6 +475,20 @@ class QueueCog(commands.Cog):
         ansstring = ' '.join(answer)
         await ctx.message.delete()
         await Queue.queues[qid].answer(ctx, idx, ansstring)
+
+    @commands.command()
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
+    async def amend(self, ctx, idx: int, *amendment):
+        ''' Amend an answer.
+
+            Arguments:
+            - idx: The index number of the answered question you want to amend
+            - amendment: The text you want to add to the answer
+        '''
+        qid = (ctx.guild.id, ctx.channel.id)
+        amstring = ' '.join(amendment)
+        await ctx.message.delete()
+        await Queue.queues[qid].amend(ctx, idx, amstring)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
