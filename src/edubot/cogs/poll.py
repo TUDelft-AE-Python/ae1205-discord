@@ -200,6 +200,7 @@ class Poll(commands.Cog):
 
         # This dictionary contains all the currently active quizzes
         self.quizzes = {}
+        self.last_started = ''
         self.load_quizzes()
 
     def cog_unload(self):
@@ -230,7 +231,6 @@ class Poll(commands.Cog):
         await ctx.message.delete()
 
     def load_quizzes(self):
-
         '''Function to load the pickle object containing all the currently active quizzes'''
 
         # If it doesn't exist, there is nothing to load.
@@ -304,6 +304,7 @@ class Poll(commands.Cog):
 
         # Add the quiz to the internal dict
         self.quizzes[new_quiz.message_id] = new_quiz
+        self.last_started = new_quiz.name
 
         # Add the appropriate reactions
         for em in emojis:
@@ -332,7 +333,7 @@ class Poll(commands.Cog):
             # Delete the message containing the command
             await ctx.message.delete()
 
-            quiz_name = " ".join(args)
+            quiz_name = " ".join(args) if args else self.last_started
 
             try:
                 quiz_to_finish = self.quizzes[list(filter(lambda k: self.quizzes[k].name == quiz_name, self.quizzes))[0]]
