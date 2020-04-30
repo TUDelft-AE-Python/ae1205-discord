@@ -19,8 +19,8 @@ class Quiz:
     Also contains information about the quiz message and creator for use by the Discord API
     """
 
-    def __init__(self,name,json_file, owner):
-        self.name = name
+    def __init__(self, json_file, owner):
+        self.name = 'Quiz'
         self.filename = json_file
         self.owner = owner
 
@@ -38,24 +38,20 @@ class Quiz:
                               (":one:",":two:",":three:",":four:",":five:",":six:",":seven:",":eight:",":nine:")]
 
     def load_data(self):
-
         '''Function for loading in json files containing the quiz information'''
         try:
             with open(self.filename, "r") as file:
                 json_data = json.load(file)
-
+            self.name = json_data.get('name', 'Quiz')
             self.question = str(json_data["question"])
             self.options = {i+1: str(option) for i,option in enumerate(json_data["options"])}
 
-            correct = str(json_data["correct"])
-            self.correct_answer = None if len(correct) == 0 or correct in ("0","-1") else int(correct)
+            self.correct_answer = json_data.get('correct', None)
             self.votes = {i+1: [] for i in range(len(self.options))}
 
             # When the  file is read in, the timer specified there is used as a baseline. !makequiz and !startquiz
             # Can overwrite this value
-            if "timer" in json_data:
-                timer_val = str(json_data["timer"])
-                self.timer = None if len(timer_val) == 0 or timer_val in ("0","-1") else int(timer_val)
+            self.timer = json_data.get('timer', None)
 
             succesful = True
 
@@ -204,6 +200,7 @@ class Poll(commands.Cog):
 
         # This dictionary contains all the currently active quizzes
         self.quizzes = {}
+        self.last_started = ''
         self.load_quizzes()
 
     def cog_unload(self):
@@ -230,11 +227,10 @@ class Poll(commands.Cog):
     async def save_quiz(self,ctx):
         self.save_quizzes()
         await ctx.channel.send(f"<@{ctx.author.id}> Currently active quizzes saved!",
-                               delete_after=3)
+                               delete_after=20)
         await ctx.message.delete()
 
     def load_quizzes(self):
-
         '''Function to load the pickle object containing all the currently active quizzes'''
 
         # If it doesn't exist, there is nothing to load.
@@ -251,9 +247,14 @@ class Poll(commands.Cog):
                                             "begin_quiz","launchquiz","launch_quiz","launch-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
-    async def start_quiz(self,ctx,*args):
+    async def start_quiz(self, ctx, fname : str, timeout : int = None):
 
-        '''Discord command to create a Quiz object and represent it in Discord'''
+        ''' Discord command to start a quiz.
+
+            Arguments:
+            - fname: The JSON file containing the quiz
+            - timeout: Timeout in seconds for each question (optional)
+        '''
 
         # Save the channel in which the message was sent
         quiz_channel = ctx.channel
@@ -263,56 +264,34 @@ class Poll(commands.Cog):
         # Delete the message containing the command
         await ctx.message.delete()
 
-        try:
-            quiz_filename = args[0]
-            quiz_name = " ".join(args[1:])
-            timer_value = None
-
-            if len(quiz_name) == 0:
-                raise Exception
-
-            # A timer value has also been specified, which must be extracted before proceeding.
-            if "timer=" in quiz_name.lower():
-                timer_value = int(args[-1].lower().strip("timer="))
-                timer_value = timer_value if timer_value > 0 else None
-                quiz_name = " ".join(args[1:-1])
-
-        except Exception:
-            await ctx.channel.send(
-                f"<@{ctx.author.id}> Command used incorrectly! Please provide the filename first, then the quiz name. "
-                f"Optionally, a time limit can be specified using timer=xx",
-                delete_after=3
-            )
-            return
-
         # Add a .json extension if it is not present
-        if not ".json" in quiz_filename:
-            quiz_filename += ".json"
+        if ".json" not in fname:
+            fname += ".json"
 
-        quiz_filepath = self.datadir.joinpath(quiz_filename)
+        quiz_filepath = self.datadir.joinpath(fname)
 
         # Check if the filename specified actually exists
         if not quiz_filepath.exists():
             await ctx.channel.send(
                 f"<@{ctx.author.id}> The filename provided does not seem to exist, please check spelling and try again.",
-                delete_after=3
+                delete_after=20
             )
             return
 
         # Create the new quiz
-        was_succesful, new_quiz = Quiz(quiz_name,quiz_filepath,quiz_creator).load_data()
+        was_succesful, new_quiz = Quiz(quiz_filepath, quiz_creator).load_data()
 
         # Abort if the data reading has failed. If the bot has been properly configured, this means that the json
         # formatting is wrong.
         if not was_succesful:
             await ctx.channel.send(
                 f"<@{ctx.author.id}> The json quiz file has been improperly formatted!",
-                delete_after=5
+                delete_after=20
             )
             return
 
-        if timer_value:
-            new_quiz.timer = timer_value
+        if timeout:
+            new_quiz.timer = timeout
 
         # Create the message belonging to the quiz and give it a green coloured embed
         title, description, emojis = new_quiz.generate_quiz_message()
@@ -325,6 +304,7 @@ class Poll(commands.Cog):
 
         # Add the quiz to the internal dict
         self.quizzes[new_quiz.message_id] = new_quiz
+        self.last_started = new_quiz.name
 
         # Add the appropriate reactions
         for em in emojis:
@@ -339,9 +319,8 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def finish_quiz(self,ctx,*args):
-
         """
-        Discord command to end a quiz and publish its results using the Quiz create_histogram function.
+        End a quiz and publish its results using a histogram.
         It sends the histogram to the channel where the quiz resides as well as the people who started
         and ended the quiz.
         """
@@ -354,14 +333,14 @@ class Poll(commands.Cog):
             # Delete the message containing the command
             await ctx.message.delete()
 
-            quiz_name = " ".join(args)
+            quiz_name = " ".join(args) if args else self.last_started
 
             try:
                 quiz_to_finish = self.quizzes[list(filter(lambda k: self.quizzes[k].name == quiz_name, self.quizzes))[0]]
             except Exception:
                 await ctx.channel.send(
                     f"<@{ctx.author.id}> That quiz does not exist, please check the spelling of the name you provided!",
-                    delete_after=3
+                    delete_after=20
                 )
                 return
 
@@ -424,7 +403,7 @@ class Poll(commands.Cog):
 
         if len(args) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> No arguments were given!",
-                                   delete_after=3)
+                                   delete_after=20)
             await ctx.message.delete()
             return
 
@@ -443,7 +422,7 @@ class Poll(commands.Cog):
             await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Either attach the json file to "
                                    f"the message and provide the filename as argument or provide filename, question, "
                                    f"answers and correct response as separate arguments.",
-                                   delete_after=6)
+                                   delete_after=20)
             await ctx.message.delete()
             return
         timer_value = ''
@@ -465,12 +444,11 @@ class Poll(commands.Cog):
 
         await ctx.message.delete()
 
-    @commands.command("view-quizzes", aliases=("viewquizzes", "view_quizzes", "view_quiz", "viewquiz", "view-quiz"))
+    @commands.command("viewquiz", aliases=("viewquizzes", "view_quizzes", "view_quiz", "view-quizzes", "view-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def view_quizzes(self,ctx):
-
-        '''Function to list all stored json files as well as all active quizzes'''
+        ''' List all stored json files as well as all active quizzes. '''
 
         json_files = [path.name for path in list(self.datadir.rglob("*.json"))]
         currently_active = [self.quizzes[message_id].name for message_id in self.quizzes]
@@ -481,13 +459,13 @@ class Poll(commands.Cog):
         # Check if the string is empty
         if len(to_send.strip()) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> There are no json files stored and no quizzes active.",
-                                   delete_after=4)
+                                   delete_after=20)
         else:
             embed = discord.Embed(title="Quiz JSON files and active quizzes", description=to_send, colour=0x41f109)
             await ctx.channel.send(embed=embed, delete_after=30)
         await ctx.message.delete()
 
-    @commands.command("inspect_quiz", aliases=("inspectquiz","inspect-quiz"))
+    @commands.command("inspectquiz", aliases=("inspect_quiz", "inspect-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def inspect_quiz_json(self,ctx,*args):
@@ -498,15 +476,15 @@ class Poll(commands.Cog):
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
             await ctx.channel.send(f"<@{ctx.author.id}> That file does not exist!",
-                                   delete_after=4)
+                                   delete_after=20)
         else:
             await ctx.channel.send(f"<@{ctx.author.id}> File will be sent via private message.",
-                                   delete_after=4)
+                                   delete_after=20)
             await self.bot.get_user(ctx.author.id).send(f"<@{ctx.author.id}> Here is the file that you requested.",
                                                         file=discord.File(filepath))
         await ctx.message.delete()
 
-    @commands.command("delete-quiz", aliases=("deletequiz","delete_quiz","removequiz","remove-quiz","remove_quiz"))
+    @commands.command("delquiz", aliases=("delete-quiz", "deletequiz", "delete_quiz", "removequiz", "remove-quiz", "remove_quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def remove_quiz(self,ctx,*args):
@@ -517,11 +495,11 @@ class Poll(commands.Cog):
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
             await ctx.channel.send(f"<@{ctx.author.id}> That file does not exist!",
-                                   delete_after=4)
+                                   delete_after=20)
         else:
             filepath.unlink()
             await ctx.channel.send(f"<@{ctx.author.id}> File deleted!",
-                                   delete_after=3)
+                                   delete_after=20)
         await ctx.message.delete()
 
 
