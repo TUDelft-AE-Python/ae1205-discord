@@ -245,7 +245,7 @@ class QuestionQueue(Queue):
     qtype = 'Question'
 
     class Question:
-        def __init__(self, askedby, qmsg, disc_msg):
+        def __init__(self, askedby, qmsg, disc_msg=None):
             self.qmsg = qmsg
             self.disc_msg = disc_msg
             self.followers = [askedby]
@@ -318,7 +318,8 @@ class QuestionQueue(Queue):
             # This is a text-based answer
             qstn = self.queue.pop(idx)
             # Delete the question message
-            await qstn.disc_msg.delete()
+            if qstn.disc_msg is not None:
+                await qstn.disc_msg.delete()
             # Create the answer message
             content = f'**Question:** {qstn.qmsg}\n\n**Answer:** {answer}\n\n' + \
                   f'**Answered by: **<@{ctx.author.id}>'
@@ -342,12 +343,17 @@ class QuestionQueue(Queue):
                 return
 
             qstn = self.queue.pop(idx)
-            await qstn.disc_msg.delete()
-            msg = f'Question {idx} will be answered in voice channel <#{cv.id}> by <@{ctx.author.id}> for ' + \
-                ', '.join([f'<@{uid}>' for uid in qstn.followers]) + '!\n'
+            if qstn.disc_msg is not None:
+                await qstn.disc_msg.delete()
+            content = f'**Question:** {qstn.qmsg}\n\nQuestion {idx} will be answered in voice channel <#{cv.id}>\n\n' + \
+                f'**Answered by: **<@{ctx.author.id}>'
             embed = discord.Embed(title=f"Answer to question {idx}:",
-                                  description=msg, colour=0x41f109)
-            await ctx.channel.send(embed=embed)
+                                  description=content, colour=0x41f109)
+            msg = '**Followers:** ' + \
+                  ', '.join([f'<@{uid}>' for uid in qstn.followers])
+            # Store the answer message object for possible later amendments
+            qstn.disc_msg = await ctx.channel.send(msg, embed=embed)
+            self.answers[idx] = qstn
 
     async def amend(self, ctx, idx, amendment=''):
         ''' Amend the answer to question with index idx. '''
