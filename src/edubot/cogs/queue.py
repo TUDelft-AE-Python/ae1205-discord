@@ -65,11 +65,13 @@ class Queue:
             return True
         queue = Queue.queues.get((ctx.guild.id, ctx.channel.id), None)
         if queue is None:
-            await ctx.send('This channel doesn\'t have a queue!')
+            await ctx.send('This channel doesn\'t have a queue!', delete_after=20)
+            await ctx.message.delete(delay=20)
             return False
         if not qtype or qtype == queue.qtype:
             return True
-        await ctx.send(f'{ctx.invoked_with} is not a recognised command for the queue in this channel!')
+        await ctx.send(f'{ctx.invoked_with} is not a recognised command for the queue in this channel!', delete_after=20)
+        await ctx.message.delete(delay=20)
         return False
 
     @classmethod
@@ -107,17 +109,19 @@ class Queue:
         ''' Return the size of this queue. '''
         return len(self.queue)
 
-    def add(self, uid):
+    async def add(self, ctx, uid):
         ''' Add user with uid to this queue. '''
+        # Delete the originating command message
+        await ctx.message.delete()
         try:
             pos = self.queue.index(uid)
-            return f'You are already in the queue <@{uid}>! ' + \
+            msg = f'You are already in the queue <@{uid}>! ' + \
                 (f'There are still {pos} people waiting in front of you.' if pos else
                     'You are next in line!')
         except ValueError:
             self.queue.append(uid)
-            return f'Added <@{uid}> to the queue at position {len(self.queue)}'
-        self.queue.append(uid)
+            msg = f'Added <@{uid}> to the queue at position {len(self.queue)}'
+        await ctx.send(msg, delete_after=4)
 
     def remove(self, uid):
         ''' Remove user with uid from this queue. '''
@@ -241,8 +245,9 @@ class QuestionQueue(Queue):
     qtype = 'Question'
 
     class Question:
-        def __init__(self, askedby, qmsg):
+        def __init__(self, askedby, qmsg, disc_msg):
             self.qmsg = qmsg
+            self.disc_msg = disc_msg
             self.followers = [askedby]
 
     def __init__(self, qid, guildname, channame):
@@ -263,30 +268,46 @@ class QuestionQueue(Queue):
         ''' Return queue data for storage in json file. '''
         return [(q.qmsg, q.followers) for q in self.queue.values()]
 
-    def follow(self, member, idx=None):
+    async def follow(self, ctx, idx=None):
         """ Follow a question. """
+        await ctx.message.delete()
         if not self.queue:
-            return 'There are no questions in the queue!'
+            await ctx.send('There are no questions in the queue!', delete_after=20)
+            return
+
+        member = ctx.author.id
         if idx is None:
             msg = '**The following questions can be followed:**\n\n'
             for qidx, qstn in self.queue.items():
                 msg = msg + f'**- {qidx:02d}:** {qstn.qmsg}' + \
                     (' (already following)\n' if member in qstn.followers else '\n')
-            return msg
+            embed = discord.Embed(title="Questions in this queue:",
+                                  description=msg, colour=0x41f109)
+            await ctx.channel.send(embed=embed, delete_after=30)
+            return
 
         question = self.queue.get(idx, None)
         if question is None:
-            return f'No question in the queue with index {idx}'
-        if member in question.followers:
-            return f'You are already following question {idx} <@{member}>!'
-        question.followers.append(member)
-        return f'You are now following question {idx} <@{member}>!'
+            msg = f'Hi <@{member}>! There\'s no question in the queue with index {idx}!'
+        elif member in question.followers:
+            msg = f'You are already following question {idx} <@{member}>!'
+        else:
+            question.followers.append(member)
+            msg = f'You are now following question {idx} <@{member}>!'
+        await ctx.send(msg, delete_after=20)
 
-    def add(self, askedby, qmsg):
+    async def add(self, ctx, askedby, qmsg):
         ''' Add question to this queue. '''
+        # Delete the originating command message
+        await ctx.message.delete()
         self.maxidx += 1
-        self.queue[self.maxidx] = QuestionQueue.Question(askedby, qmsg)
-        return f'<@{askedby}>: Your question is added at position {len(self.queue)} with index {self.maxidx}'
+        content = f'**Question:** {qmsg}\n\n**Asked by:** <@{askedby}>'
+        embed = discord.Embed(title=f"Question {self.maxidx}:",
+                              description=content, colour=0x41f109)
+        disc_msg = await ctx.send(embed=embed)
+        self.queue[self.maxidx] = QuestionQueue.Question(askedby, qmsg, disc_msg)
+        msg = f'<@{askedby}>: Your question is added at position {len(self.queue)} with index {self.maxidx}'
+        await ctx.send(msg, delete_after=4)
 
     async def answer(self, ctx, idx, answer=None):
         if idx not in self.queue:
@@ -295,13 +316,22 @@ class QuestionQueue(Queue):
         elif answer:
             # This is a text-based answer
             qstn = self.queue.pop(idx)
-            msg = f'**Question:** {qstn.qmsg}\n\n**Answer:** {answer}\n\n' + \
-                  f'**Answered by: **<@{ctx.author.id}>\n\n**Followers:** ' + \
+            # Delete the question message
+            await qstn.disc_msg.delete()
+            # Create the answer message
+            content = f'**Question:** {qstn.qmsg}\n\n**Answer:** {answer}\n\n' + \
+                  f'**Answered by: **<@{ctx.author.id}>'
+            msg = '**Followers:** ' + \
                   ', '.join([f'<@{uid}>' for uid in qstn.followers])
             embed = discord.Embed(title=f"Answer to question {idx}:",
-                                  description=msg, colour=0x41f109)
+                                  description=content, colour=0x41f109)
             # Store the answer message object for possible later amendments
-            self.answers[idx] = await ctx.channel.send(embed=embed)
+            qstn.disc_msg = await ctx.channel.send(msg, embed=embed)
+            self.answers[idx] = qstn
+
+            # Say something nice if student answers his/her own question
+            if qstn.followers[0] == ctx.author.id:
+                await ctx.send(f'Well done <@{ctx.author.id}>! You solved your own question!')
 
         else:
             # The question will be answered in a voice chat
@@ -311,6 +341,7 @@ class QuestionQueue(Queue):
                 return
 
             qstn = self.queue.pop(idx)
+            await qstn.disc_msg.delete()
             msg = f'Question {idx} will be answered in voice channel <#{cv.id}> by <@{ctx.author.id}> for ' + \
                 ', '.join([f'<@{uid}>' for uid in qstn.followers]) + '!\n'
             embed = discord.Embed(title=f"Answer to question {idx}:",
@@ -319,11 +350,12 @@ class QuestionQueue(Queue):
 
     async def amend(self, ctx, idx, amendment=''):
         ''' Amend the answer to question with index idx. '''
-        msg = self.answers.get(idx, None)
-        if msg is None:
+        qstn = self.answers.get(idx, None)
+        if qstn is None:
             await ctx.send(f'<@{ctx.author.id}>: No answered question found with index {idx}', delete_after=20)
             return
 
+        msg = qstn.disc_msg
         embed = msg.embeds[0]
         title = embed.title
         colour = embed.colour
@@ -335,9 +367,9 @@ class QuestionQueue(Queue):
         newcontent = content[:inspos] + f'**Amendment from <@{ctx.author.id}>: ** {amendment}\n\n' + content[inspos:]
         newembed = discord.Embed(title=title,
                                  description=newcontent, colour=colour)
-        self.answers[idx] = await ctx.channel.send(embed=newembed)
-
-
+        msg = '**Followers:** ' + \
+            ', '.join([f'<@{uid}>' for uid in qstn.followers])
+        qstn.disc_msg = await ctx.channel.send(msg, embed=newembed)
 
     def whereis(self, uid):
         ''' Find questions followed by user with id 'uid' in this queue. '''
@@ -425,8 +457,7 @@ class QueueCog(commands.Cog):
     async def queueme(self, ctx, *args):
         """ Add me to the queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
-        await ctx.message.delete()
-        await ctx.send(Queue.queues[qid].add(ctx.author.id), delete_after=4)
+        await Queue.queues[qid].add(ctx, ctx.author.id)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
@@ -459,7 +490,7 @@ class QueueCog(commands.Cog):
         """
         qid = (ctx.guild.id, ctx.channel.id)
         qmsg = ' '.join(args)
-        await ctx.send(Queue.queues[qid].add(ctx.author.id, qmsg))
+        await Queue.queues[qid].add(ctx, ctx.author.id, qmsg)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
@@ -499,15 +530,8 @@ class QueueCog(commands.Cog):
             - idx: The index of the question to follow (optional: if no index
               is given a list of questions is printed).
         '''
-        await ctx.message.delete()
         qid = (ctx.guild.id, ctx.channel.id)
-        text = Queue.queues[qid].follow(ctx.author.id, idx)
-        if idx is not None:
-            await ctx.send(text, delete_after=30)
-        else:
-            embed = discord.Embed(title="Questions in this queue:",
-                                  description=text, colour=0x41f109)
-            await ctx.channel.send(embed=embed, delete_after=30)
+        await Queue.queues[qid].follow(ctx, idx)
 
     @commands.command()
     @commands.check(Queue.qcheck)
@@ -534,4 +558,4 @@ class QueueCog(commands.Cog):
             await ctx.send(f'There are {size} entries in the queue of <#{ctx.channel.id}>')
         else:
             # Member is passed, add him/her to the queue
-            await ctx.send(Queue.queues[qid].add(member.id))
+            await Queue.queues[qid].add(ctx, member.id)
