@@ -258,6 +258,7 @@ class QuestionQueue(Queue):
 
     def fromfile(self, qdata):
         ''' Build queue from data out of json file. '''
+        idx = -1
         for idx, (qmsg, qf) in enumerate(qdata):
             question = QuestionQueue.Question(0, qmsg)
             question.followers = qf
