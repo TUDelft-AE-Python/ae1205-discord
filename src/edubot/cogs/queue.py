@@ -491,21 +491,21 @@ class QueueCog(commands.Cog):
         await ctx.message.delete()
         await ctx.send(Queue.queues[qid].remove(member.id), delete_after=10)
 
-    @commands.command('ask', aliases=('question',))
+    @commands.command('ask', aliases=('question',), rest_is_raw=True)
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
-    async def question(self, ctx, *args):
+    async def question(self, ctx):
         """ Ask a question in this channel.
         
             Arguments:
             - question: The question you want to ask.
         """
         qid = (ctx.guild.id, ctx.channel.id)
-        qmsg = ' '.join(args)
+        qmsg = ctx.message.content[4:]
         await Queue.queues[qid].add(ctx, ctx.author.id, qmsg)
 
-    @commands.command()
+    @commands.command(rest_is_raw=True)
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
-    async def answer(self, ctx, idx: int, *answer):
+    async def answer(self, ctx, idx: int):
         ''' Answer a question.
         
             Arguments:
@@ -514,13 +514,14 @@ class QueueCog(commands.Cog):
               given, followers are invited to your voice channel)
         '''
         qid = (ctx.guild.id, ctx.channel.id)
-        ansstring = ' '.join(answer)
+        offset = len(f'!answer {idx} ')
+        ansstring = ctx.message.content[offset:]
         await ctx.message.delete()
         await Queue.queues[qid].answer(ctx, idx, ansstring)
 
-    @commands.command()
+    @commands.command(rest_is_raw=True)
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
-    async def amend(self, ctx, idx: int, *amendment):
+    async def amend(self, ctx, idx: int):
         ''' Amend an answer.
 
             Arguments:
@@ -528,7 +529,8 @@ class QueueCog(commands.Cog):
             - amendment: The text you want to add to the answer
         '''
         qid = (ctx.guild.id, ctx.channel.id)
-        amstring = ' '.join(amendment)
+        offset = len(f'!amend {idx}')
+        amstring = ctx.message.content[offset:]
         await ctx.message.delete()
         await Queue.queues[qid].amend(ctx, idx, amstring)
 
