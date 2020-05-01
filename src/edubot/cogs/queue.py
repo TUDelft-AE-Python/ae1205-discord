@@ -286,7 +286,7 @@ class QuestionQueue(Queue):
                 msg = msg + f'**- {qidx:02d}:** {qstn.qmsg}' + \
                     (' (already following)\n' if member in qstn.followers else '\n')
             embed = discord.Embed(title="Questions in this queue:",
-                                  description=msg, colour=0x41f109)
+                                  description=msg, colour=0x3939cf)
             await ctx.channel.send(embed=embed, delete_after=30)
             return
 
