@@ -300,6 +300,9 @@ class QuestionQueue(Queue):
         ''' Add question to this queue. '''
         # Delete the originating command message
         await ctx.message.delete()
+        if not qmsg:
+            await ctx.send('You can\'t ask without a question!', delete_after=10)
+            return
         self.maxidx += 1
         content = f'**Question:** {qmsg}\n\n**Asked by:** <@{askedby}>'
         embed = discord.Embed(title=f"Question {self.maxidx}:",
