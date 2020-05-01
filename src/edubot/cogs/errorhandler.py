@@ -27,7 +27,7 @@ class ErrorHandler(commands.Cog):
         error = getattr(error, 'original', error)
 
         if isinstance(error, (commands.CommandNotFound, commands.UserInputError, commands.BadArgument)):
-            return await ctx.send(f'Command or argument not recognised! Did you make a typo @<{ctx.author.id}>?', delete_after=10)
+            return await ctx.send(f'Command or argument not recognised! Did you make a typo <@{ctx.author.id}>?', delete_after=10)
 
         elif isinstance(error, commands.DisabledCommand):
             return await ctx.send(f'{ctx.command} has been disabled, <@{ctx.author.id}>.', delete_after=10)
