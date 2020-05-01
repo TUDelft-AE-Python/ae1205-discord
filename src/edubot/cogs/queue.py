@@ -15,10 +15,14 @@
 # License along with this program.
 # If not, see <https://www.gnu.org/licenses/>.
 import json
+import re
 from collections import OrderedDict
 
 import discord
 from discord.ext import commands
+
+# Generate regular expressions for raw content parsing
+re_ask = re.compile(r'(?:!ask|!question)\s*(.*)')
 
 
 def getvoicechan(member):
@@ -500,7 +504,7 @@ class QueueCog(commands.Cog):
             - question: The question you want to ask.
         """
         qid = (ctx.guild.id, ctx.channel.id)
-        qmsg = ctx.message.content[4:]
+        qmsg = re_ask.match(ctx.message.content).groups()[0]
         await Queue.queues[qid].add(ctx, ctx.author.id, qmsg)
 
     @commands.command(rest_is_raw=True)
@@ -514,8 +518,8 @@ class QueueCog(commands.Cog):
               given, followers are invited to your voice channel)
         '''
         qid = (ctx.guild.id, ctx.channel.id)
-        offset = len(f'!answer {idx} ')
-        ansstring = ctx.message.content[offset:]
+        offset = ctx.message.content.index(str(idx))
+        ansstring = ctx.message.content[offset:].strip()
         await ctx.message.delete()
         await Queue.queues[qid].answer(ctx, idx, ansstring)
 
@@ -529,8 +533,8 @@ class QueueCog(commands.Cog):
             - amendment: The text you want to add to the answer
         '''
         qid = (ctx.guild.id, ctx.channel.id)
-        offset = len(f'!amend {idx}')
-        amstring = ctx.message.content[offset:]
+        offset = ctx.message.content.index(str(idx))
+        amstring = ctx.message.content[offset:].strip()
         await ctx.message.delete()
         await Queue.queues[qid].amend(ctx, idx, amstring)
 
