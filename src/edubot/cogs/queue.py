@@ -29,8 +29,7 @@ def getvoicechan(member):
 
 def readymovevoice(member):
     ''' Check if this member is ready to be moved to a discussion channel. '''
-    return (getvoicechan(member) != None) and not member.voice.self_stream \
-        and not member.voice.afk
+    return (getvoicechan(member) != None) and not member.voice.self_stream
 
 class Queue:
     ''' Base queue implementation. '''
