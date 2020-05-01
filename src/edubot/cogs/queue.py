@@ -306,7 +306,7 @@ class QuestionQueue(Queue):
         self.maxidx += 1
         content = f'**Question:** {qmsg}\n\n**Asked by:** <@{askedby}>'
         embed = discord.Embed(title=f"Question {self.maxidx}:",
-                              description=content, colour=0x583f44)  # 0x41f109
+                              description=content, colour=0xd13b33)  # 0x41f109
         disc_msg = await ctx.send(embed=embed)
         self.queue[self.maxidx] = QuestionQueue.Question(askedby, qmsg, disc_msg)
         msg = f'<@{askedby}>: Your question is added at position {len(self.queue)} with index {self.maxidx}'
@@ -328,7 +328,7 @@ class QuestionQueue(Queue):
             msg = '**Followers:** ' + \
                   ', '.join([f'<@{uid}>' for uid in qstn.followers])
             embed = discord.Embed(title=f"Answer to question {idx}:",
-                                  description=content, colour=0x43583f)  # 0x41f109
+                                  description=content, colour=0x25a52b)  # 0x41f109
             # Store the answer message object for possible later amendments
             qstn.disc_msg = await ctx.channel.send(msg, embed=embed)
             self.answers[idx] = qstn
@@ -350,7 +350,7 @@ class QuestionQueue(Queue):
             content = f'**Question:** {qstn.qmsg}\n\nQuestion {idx} will be answered in voice channel <#{cv.id}>\n\n' + \
                 f'**Answered by: **<@{ctx.author.id}>'
             embed = discord.Embed(title=f"Answer to question {idx}:",
-                                  description=content, colour=0x43583f)
+                                  description=content, colour=0x25a52b)
             msg = '**Followers:** ' + \
                   ', '.join([f'<@{uid}>' for uid in qstn.followers])
             # Store the answer message object for possible later amendments
@@ -367,7 +367,7 @@ class QuestionQueue(Queue):
         msg = qstn.disc_msg
         embed = msg.embeds[0]
         title = embed.title
-        colour = embed.colour
+        colour = 0x2cc533 #embed.colour
         content = embed.description
         inspos = content.find('**Answered by: **')
         # Delete the original answer
@@ -440,8 +440,8 @@ class QueueCog(commands.Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def makequeue(self, ctx, qtype='Review'):
-        """ Make a queue in this channel. 
-        
+        """ Make a queue in this channel.
+
             Arguments:
             - qtype: The type of queue to create. (optional, default=Review)
         """
@@ -482,8 +482,8 @@ class QueueCog(commands.Cog):
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def remove(self, ctx, member: discord.Member):
-        """ Remove user from the queue in this channel. 
-        
+        """ Remove user from the queue in this channel.
+
             Arguments:
             - @user: Mention the user to remove from the queue.
         """
@@ -495,7 +495,7 @@ class QueueCog(commands.Cog):
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
     async def question(self, ctx, *args):
         """ Ask a question in this channel.
-        
+
             Arguments:
             - question: The question you want to ask.
         """
@@ -507,7 +507,7 @@ class QueueCog(commands.Cog):
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
     async def answer(self, ctx, idx: int, *answer):
         ''' Answer a question.
-        
+
             Arguments:
             - idx: The index number of the question you want to answer
             - answer: The answer to the question (optional: if no answer is
@@ -536,7 +536,7 @@ class QueueCog(commands.Cog):
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
     async def follow(self, ctx, idx: int = None):
         ''' Follow a question.
-        
+
             Arguments:
             - idx: The index of the question to follow (optional: if no index
               is given a list of questions is printed).
@@ -557,7 +557,7 @@ class QueueCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def queue(self, ctx, *, member: discord.Member = None):
         """ Admin command: check and add to the queue.
-        
+
             Arguments:
             - @user mention: Mention the user you want to add to the queue (optional:
               if no user is given, the length of the queue is returned).
