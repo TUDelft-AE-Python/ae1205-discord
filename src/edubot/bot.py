@@ -22,7 +22,7 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-from .cogs import Poll, QueueCog
+from .cogs import Poll, QueueCog, ErrorHandler
 
 
 class EduBot(commands.Bot):
@@ -42,6 +42,7 @@ class EduBot(commands.Bot):
             Path.mkdir(self.datadir)
         self.add_cog(QueueCog(self))
         self.add_cog(Poll(self))
+        self.add_cog(ErrorHandler(self))
 
     async def on_ready(self):
         """Bot initialisation upon connecting to Discord."""
