@@ -240,7 +240,7 @@ class Poll(commands.Cog):
         with open(self.save_filepath, 'r') as file:
             json_data = json.load(file)
 
-        self.quizzes = {int(message_id): Quiz(None,None,None).load_from_save_data(json_data[message_id])
+        self.quizzes = {int(message_id): Quiz(None,None).load_from_save_data(json_data[message_id])
                         for message_id in json_data}
 
     @commands.command("startquiz", aliases=("start-quiz","start_quiz","quiz","beginquiz","begin-quiz",
@@ -265,8 +265,7 @@ class Poll(commands.Cog):
         await ctx.message.delete()
 
         # Add a .json extension if it is not present
-        if ".json" not in fname:
-            fname += ".json"
+        fname += ".json" if ".json" not in fname else ""
 
         quiz_filepath = self.datadir.joinpath(fname)
 
@@ -291,7 +290,8 @@ class Poll(commands.Cog):
             return
 
         if timeout:
-            new_quiz.timer = timeout
+            timeout = int(timeout)
+            new_quiz.timer = timeout if timeout not in (-1,0) else None
 
         # Create the message belonging to the quiz and give it a green coloured embed
         title, description, emojis = new_quiz.generate_quiz_message()
@@ -411,8 +411,8 @@ class Poll(commands.Cog):
         if len(ctx.message.attachments) > 0:
             # In this case, the command usage dictates that the argument is the filename that should be used
             # to save the json file.
-            file_name = " ".join(args).rstrip(".json")
-            file_name += ".json"
+            file_name = " ".join(args)
+            file_name += ".json" if ".json" not in file_name else ""
             await ctx.message.attachments[0].save(self.datadir.joinpath(file_name), use_cached=False, seek_begin=True)
             await ctx.message.delete()
             return
@@ -420,24 +420,26 @@ class Poll(commands.Cog):
         # If not, the json data must be given as an argument
         if not len(args) >= 4:
             await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Either attach the json file to "
-                                   f"the message and provide the filename as argument or provide filename, question, "
-                                   f"answers and correct response as separate arguments.",
+                                   f"the message and provide the filename as argument or provide filename, quiz name, "
+                                   f"question, answers and, if applicable, the correct response as separate arguments.",
                                    delete_after=20)
             await ctx.message.delete()
             return
         timer_value = ''
         # A timer value was added, which needs to be extracted now
-        if len(args) == 5:
-            timer_value = f', "timer":{args[4].lower().strip("timer=")}'
+        if "timer=" in args[-1]:
+            timer_value = f', "timer":{args[-1].lower().strip("timer=")}'
             args = args[:-1]
 
-        question = args[1]
-        correct = args[-1]
-        options_parsed = args[-2].split(";")
+        file_name = args[0] + (".json" if ".json" not in args[0] else "")
+        quiz_name = args[1]
+        question = args[2]
+        correct = f', "correct": {args[-1]}' if len(args) == 5 else ''
+        options_parsed = args[3].split(";")
         options_parsed = ','.join([f'"{opt}"' for opt in options_parsed])
 
-        file_name = args[0].rstrip(".json") + ".json"
-        json_string = f'{{"question": "{question}", "options": [{options_parsed}], "correct": "{correct}"{timer_value}}}'
+        json_string = f'{{"name": "{quiz_name}", "question": "{question}",' \
+                      f' "options": [{options_parsed}]{correct}{timer_value}}}'
 
         with open(self.datadir.joinpath(file_name), 'w') as file:
             file.write(json_string)
@@ -472,7 +474,9 @@ class Poll(commands.Cog):
 
         '''Function to send stored json file via private message to the user'''
 
-        filename = (" ".join(args)).rstrip(".json") + ".json"
+        filename = " ".join(args)
+        filename += ".json" if ".json" not in filename else ""
+
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
             await ctx.channel.send(f"<@{ctx.author.id}> That file does not exist!",
@@ -491,7 +495,8 @@ class Poll(commands.Cog):
 
         '''Function to remove a stored json file'''
 
-        filename = (" ".join(args)).rstrip(".json") + ".json"
+        filename = " ".join(args)
+        filename += ".json" if ".json" not in filename else ""
         filepath = self.datadir.joinpath(filename)
         if not filepath.exists():
             await ctx.channel.send(f"<@{ctx.author.id}> That file does not exist!",
@@ -505,7 +510,7 @@ class Poll(commands.Cog):
 
     async def quiz_timer(self, timer_duration, message_object):
 
-        '''Function to dynamicall update the timer value on a quiz and automatically end it'''
+        '''Function to dynamically update the timer value on a quiz and automatically end it'''
 
         timer = timer_duration
         t = lambda x: f"{0 if x//60 < 10 else ''}{x // 60}:{0 if x % 60 < 10 else ''}{x % 60}{0 if x % 60 == 0 else ''}"
