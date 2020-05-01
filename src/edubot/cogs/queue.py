@@ -303,7 +303,7 @@ class QuestionQueue(Queue):
         self.maxidx += 1
         content = f'**Question:** {qmsg}\n\n**Asked by:** <@{askedby}>'
         embed = discord.Embed(title=f"Question {self.maxidx}:",
-                              description=content, colour=0x41f109)
+                              description=content, colour=0x583f44)  # 0x41f109
         disc_msg = await ctx.send(embed=embed)
         self.queue[self.maxidx] = QuestionQueue.Question(askedby, qmsg, disc_msg)
         msg = f'<@{askedby}>: Your question is added at position {len(self.queue)} with index {self.maxidx}'
@@ -325,7 +325,7 @@ class QuestionQueue(Queue):
             msg = '**Followers:** ' + \
                   ', '.join([f'<@{uid}>' for uid in qstn.followers])
             embed = discord.Embed(title=f"Answer to question {idx}:",
-                                  description=content, colour=0x41f109)
+                                  description=content, colour=0x43583f)  # 0x41f109
             # Store the answer message object for possible later amendments
             qstn.disc_msg = await ctx.channel.send(msg, embed=embed)
             self.answers[idx] = qstn
@@ -347,7 +347,7 @@ class QuestionQueue(Queue):
             content = f'**Question:** {qstn.qmsg}\n\nQuestion {idx} will be answered in voice channel <#{cv.id}>\n\n' + \
                 f'**Answered by: **<@{ctx.author.id}>'
             embed = discord.Embed(title=f"Answer to question {idx}:",
-                                  description=content, colour=0x41f109)
+                                  description=content, colour=0x43583f)
             msg = '**Followers:** ' + \
                   ', '.join([f'<@{uid}>' for uid in qstn.followers])
             # Store the answer message object for possible later amendments
