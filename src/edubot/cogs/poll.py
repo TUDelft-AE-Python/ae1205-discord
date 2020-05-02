@@ -156,6 +156,7 @@ class Quiz:
         plt.gca().yaxis.set_major_formatter(PercentFormatter())
         plt.xticks(np.array(range(1, len(self.options) + 1)))
         plt.xlabel("Answers")
+        plt.title(f"Total number of votes: {np.sum(individual_votes)}")
 
         # Color the correct answer green
         if self.correct_answer:
@@ -165,9 +166,9 @@ class Quiz:
                 patch.set_facecolor("b")
 
         # Show the values of the various bars in the bar chart above the bars
-        for bar in barchart:
-            height = round(bar.get_height(),2)
-            plt.gca().text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.2, f"{height}%",
+        for i, bar in enumerate(barchart):
+            votes = individual_votes[i]
+            plt.gca().text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.2, f"{votes}",
                            ha='center', color='white', fontsize=15)
 
         # Disable the left and top splines
@@ -289,13 +290,14 @@ class Poll(commands.Cog):
             )
             return
 
-        if timeout:
+        if timeout != None:
             timeout = int(timeout)
             new_quiz.timer = timeout if timeout not in (-1,0) else None
 
-        # Create the message belonging to the quiz and give it a green coloured embed
+
+        # Create the message belonging to the quiz and give it a blue coloured embed
         title, description, emojis = new_quiz.generate_quiz_message()
-        embed = discord.Embed(title=title, description=description, colour=0x41f109)
+        embed = discord.Embed(title=title, description=description, colour=0x3939cf)
         new_message = await quiz_channel.send(embed=embed)
 
         # Now attach this new message's id to the new quiz
@@ -355,26 +357,80 @@ class Poll(commands.Cog):
 
         feedback_chart = quiz_to_finish.create_histogram()
 
-        file_object = discord.File(feedback_chart, filename=feedback_chart.name)
-        embed = discord.Embed(title=f"Feedback for {quiz_to_finish.name}", colour=0x41f109)
-        embed.set_image(url=f"attachment://{feedback_chart.name}")
+        # Get the original quiz message
+        message = await message_channel.fetch_message(quiz_to_finish.message_id)
 
-        # Send the feedback chart to the channel where the quiz is located
-        await self.bot.get_channel(quiz_to_finish.channel_id).send(embed=embed,file=file_object)
+        # Clear the reactions and set the embed colour to green
+        await message.clear_reactions()
+        altered_embed = message.embeds[0].to_dict()
+        altered_embed["color"] = 0x25a52b # Green
+        # altered_embed.pop("footer")
+        altered_embed = discord.Embed.from_dict(altered_embed)
+        await message.edit(embed=altered_embed)
 
-        # Send the feedback chart to the person who created the quiz and the person who ended it
-        for user_id in {author_id, quiz_to_finish.owner}:
+        # Get the recipients of the feedback chart
+        channel = self.bot.get_channel(quiz_to_finish.channel_id)
+        owner = self.bot.get_user(quiz_to_finish.owner)
+        author = self.bot.get_user(author_id)
+
+        # Send the feedback chart to the recipients
+        for recipient in {channel, owner, author}:
             # Reset the buffer internal index to 0 again
             feedback_chart.seek(0)
 
             # Create the file object and embed again to avoid errors
             file_object = discord.File(feedback_chart, filename=feedback_chart.name)
-            embed = discord.Embed(title=f"Feedback for {quiz_to_finish.name}", colour=0x41f109)
+            embed = discord.Embed(title=f"Feedback for {quiz_to_finish.name}", colour=0x25a52b)
             embed.set_image(url=f"attachment://{feedback_chart.name}")
 
-            await message_channel.guild.get_member(user_id).send(embed=embed,file=file_object)
+            await recipient.send(embed=embed,file=file_object)
+
         # Remove the quiz from the internal dictionary
         self.quizzes.pop(quiz_to_finish.message_id)
+
+    @commands.command("intermediate_results", aliases=("intermediateresults", "intermediate-results", "intermediate"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def quiz_intermediate_results(self,ctx, public: str = "True", quiz_name: str = None):
+
+        '''
+        Function to obtain intermediate results of a quiz. Optional parameters: public (defaults to True), quiz name
+        If no quiz name is provided, the most recent quiz is used instead.
+        '''
+
+        if not quiz_name:
+            quiz_name = self.last_started
+
+        public = public.lower() in ("true", "yes", "1", "public")
+
+        await ctx.message.delete()
+
+        try:
+            quiz = self.quizzes[list(filter(lambda k: self.quizzes[k].name == quiz_name, self.quizzes))[0]]
+
+        except Exception:
+            await ctx.channel.send(
+                f"<@{ctx.author.id}> That quiz does not exist, please check the spelling of the name you provided!",
+                delete_after=20
+            )
+            return
+
+        # Get the current feedback chart
+        quiz_chart = quiz.create_histogram()
+
+        recipients = [self.bot.get_channel(quiz.channel_id)] * public + [ctx.message.author]
+
+        for recipient in recipients:
+            # Reset the bytesIO index to 0
+            quiz_chart.seek(0)
+
+            # Create the embed
+            file_object = discord.File(quiz_chart, filename=quiz_chart.name)
+            embed = discord.Embed(title=f"Intermediate feedback for {quiz.name}", colour=0x3939cf)
+            embed.set_image(url=f"attachment://{quiz_chart.name}")
+
+            await recipient.send(embed=embed, file=file_object, delete_after=50)
+
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self,ctx):
@@ -463,7 +519,7 @@ class Poll(commands.Cog):
             await ctx.channel.send(f"<@{ctx.author.id}> There are no json files stored and no quizzes active.",
                                    delete_after=20)
         else:
-            embed = discord.Embed(title="Quiz JSON files and active quizzes", description=to_send, colour=0x41f109)
+            embed = discord.Embed(title="Quiz JSON files and active quizzes", description=to_send, colour=0x25a52b)
             await ctx.channel.send(embed=embed, delete_after=30)
         await ctx.message.delete()
 
