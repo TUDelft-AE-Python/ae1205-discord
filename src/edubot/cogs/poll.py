@@ -156,7 +156,7 @@ class Quiz:
         plt.gca().yaxis.set_major_formatter(PercentFormatter())
         plt.xticks(np.array(range(1, len(self.options) + 1)))
         plt.xlabel("Answers")
-        plt.title(f"Total number of votes: {np.sum(individual_votes)}")
+        plt.title(f"Total number of votes: {np.sum(individual_votes)}\n")
 
         # Color the correct answer green
         if self.correct_answer:
@@ -169,7 +169,7 @@ class Quiz:
         for i, bar in enumerate(barchart):
             votes = individual_votes[i]
             plt.gca().text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.2, f"{votes}",
-                           ha='center', color='white', fontsize=15)
+                           ha='center', color='white', fontsize=12)
 
         # Disable the left and top splines
         [spine.set_visible(False) for i, spine in enumerate(list(plt.gca().spines.values())) if i in (1,3)]
