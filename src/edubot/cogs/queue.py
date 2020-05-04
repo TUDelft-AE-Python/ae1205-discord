@@ -518,7 +518,7 @@ class QueueCog(commands.Cog):
               given, followers are invited to your voice channel)
         '''
         qid = (ctx.guild.id, ctx.channel.id)
-        offset = ctx.message.content.index(str(idx))
+        offset = ctx.message.content.index(str(idx))+len(str(idx))
         ansstring = ctx.message.content[offset:].strip()
         await ctx.message.delete()
         await Queue.queues[qid].answer(ctx, idx, ansstring)
@@ -533,7 +533,7 @@ class QueueCog(commands.Cog):
             - amendment: The text you want to add to the answer
         '''
         qid = (ctx.guild.id, ctx.channel.id)
-        offset = ctx.message.content.index(str(idx))
+        offset = ctx.message.content.index(str(idx))+len(str(idx))
         amstring = ctx.message.content[offset:].strip()
         await ctx.message.delete()
         await Queue.queues[qid].amend(ctx, idx, amstring)
