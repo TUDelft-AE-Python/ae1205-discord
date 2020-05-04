@@ -253,6 +253,7 @@ class ReviewQueue(Queue):
                 'Next three in queue:\n'
         for idx, member  in enumerate(self.queue[:3]):
             msg += f'{idx+1}: <@{member}>\n'
+        msg += '\n\nType !ready to enter the queue when you\n also want to hand in your assignment!'
         embed = discord.Embed(title="Next up for review:",
                               description=msg, colour=0xae8b0c)
         # Delete previous indicator
