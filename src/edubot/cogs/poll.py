@@ -502,6 +502,71 @@ class Poll(commands.Cog):
 
         await ctx.message.delete()
 
+    @commands.command("directquiz", aliases=("direct-quiz", "direct_quiz"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def direct_quiz(self,ctx, *args):
+        if not len(args) >= 3:
+            await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Either attach the json file to "
+                                   f"the message and provide the filename as argument or provide filename, quiz name, "
+                                   f"question, answers and, if applicable, the correct response as separate arguments.",
+                                   delete_after=20)
+            await ctx.message.delete()
+            return
+
+        timer_value = None
+        # A timer value was added, which needs to be extracted now
+
+        if "timer=" in args[-1]:
+            timer_value = int(args[-1].lower().strip("timer="))
+            args = args[:-1]
+
+        # Extract all the other options
+        quiz_name = args[0]
+        question = args[1]
+        correct = int(args[-1]) if len(args) == 4 else None
+        options_parsed = args[2].split(";")
+
+        quiz_channel = ctx.message.channel
+
+        # Instantiate a Quiz object and populate it with the relevant variables
+        newquiz = Quiz(None, ctx.author.id)
+        newquiz.name = quiz_name
+        newquiz.question = question
+        newquiz.options = {i+1: str(option) for i,option in enumerate(options_parsed)}
+        newquiz.votes = {i+1: [] for i in range(len(options_parsed))}
+        newquiz.correct_answer = correct
+        newquiz.timer = timer_value
+
+
+        # Create the message belonging to the quiz and give it a blue coloured embed
+        title, description, emojis = newquiz.generate_quiz_message()
+        embed = discord.Embed(title=title, description=description, colour=0x3939cf)
+        new_message = await quiz_channel.send(embed=embed)
+
+        # Now attach this new message's id to the new quiz
+        newquiz.message_id = new_message.id
+        newquiz.channel_id = new_message.channel.id
+
+        # Add the quiz to the internal dict
+        self.quizzes[newquiz.message_id] = newquiz
+        self.last_started = newquiz.name
+
+        # Add the appropriate reactions
+        for em in emojis:
+            await new_message.add_reaction(em)
+
+        # If the quiz has a timer, activate it
+        if newquiz.timer:
+            self.bot.loop.create_task(self.quiz_timer(newquiz.timer, new_message))
+
+
+
+        await ctx.message.delete()
+
+
+
+
     @commands.command("viewquiz", aliases=("viewquizzes", "view_quizzes", "view_quiz", "view-quizzes", "view-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
