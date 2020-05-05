@@ -171,6 +171,7 @@ class ReviewQueue(Queue):
     def __init__(self, qid, guildname, channame):
         super().__init__(qid, guildname, channame)
         self.assigned = dict()
+        self.indicator = None
 
     async def takenext(self, ctx):
         ''' Take the next student from the queue. '''
@@ -243,6 +244,24 @@ class ReviewQueue(Queue):
                 await member.edit(voice_channel=voicechan)
             await self.bot.dm(member, 'You were moved back into the queue, probably because you didn\'t respond.')
 
+
+    async def updateIndicator(self, ctx):
+        '''Floating indicator displaying next in line and length of queue.
+
+        Not a command invoked by a user, but by changes in the queue.'''
+        msg = f'**Length of queue:** {len(self.queue)}.\n'+ \
+                'Next three in queue:\n'
+        for idx, member  in enumerate(self.queue[:3]):
+            msg += f'{idx+1}: <@{member}>\n'
+        msg += '\n\nType !ready to enter the queue when you\n also want to hand in your assignment!'
+        embed = discord.Embed(title="Next up for review:",
+                              description=msg, colour=0xae8b0c)
+        # Delete previous indicator
+        if self.indicator is not None:
+            await self.indicator.delete()
+
+        # Send new indicator
+        self.indicator = await ctx.channel.send(embed=embed)
 
 class QuestionQueue(Queue):
     qtype = 'Question'
@@ -427,6 +446,7 @@ class QueueCog(commands.Cog):
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         await Queue.queues[qid].takenext(ctx)
+        await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
@@ -440,6 +460,7 @@ class QueueCog(commands.Cog):
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         await Queue.queues[qid].putback(ctx, pos)
+        await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -473,6 +494,7 @@ class QueueCog(commands.Cog):
         """ Add me to the queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
         await Queue.queues[qid].add(ctx, ctx.author.id)
+        await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
@@ -481,6 +503,7 @@ class QueueCog(commands.Cog):
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         await ctx.send(Queue.queues[qid].remove(ctx.author.id), delete_after=10)
+        await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
@@ -494,6 +517,7 @@ class QueueCog(commands.Cog):
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         await ctx.send(Queue.queues[qid].remove(member.id), delete_after=10)
+        await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command('ask', aliases=('question',), rest_is_raw=True)
     @commands.check(lambda ctx: Queue.qcheck(ctx, 'Question'))
@@ -518,7 +542,7 @@ class QueueCog(commands.Cog):
               given, followers are invited to your voice channel)
         '''
         qid = (ctx.guild.id, ctx.channel.id)
-        offset = ctx.message.content.index(str(idx))
+        offset = ctx.message.content.index(str(idx))+len(str(idx))
         ansstring = ctx.message.content[offset:].strip()
         await ctx.message.delete()
         await Queue.queues[qid].answer(ctx, idx, ansstring)
@@ -533,7 +557,7 @@ class QueueCog(commands.Cog):
             - amendment: The text you want to add to the answer
         '''
         qid = (ctx.guild.id, ctx.channel.id)
-        offset = ctx.message.content.index(str(idx))
+        offset = ctx.message.content.index(str(idx))+len(str(idx))
         amstring = ctx.message.content[offset:].strip()
         await ctx.message.delete()
         await Queue.queues[qid].amend(ctx, idx, amstring)
@@ -577,3 +601,4 @@ class QueueCog(commands.Cog):
         else:
             # Member is passed, add him/her to the queue
             await Queue.queues[qid].add(ctx, member.id)
+        await Queue.queues[qid].updateIndicator(ctx)
