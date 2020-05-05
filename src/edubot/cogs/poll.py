@@ -506,6 +506,13 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def direct_quiz(self,ctx, *args):
+
+        """
+        Function to create and start a quiz directly without writing it to a json file. Syntax is comparable to
+        the !makequiz command with all arguments given in the message itself, no attachments. Only the filename must
+        be left out.
+        """
+
         if not len(args) >= 3:
             await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Either attach the json file to "
                                    f"the message and provide the filename as argument or provide filename, quiz name, "
