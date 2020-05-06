@@ -36,15 +36,20 @@ class Quiz:
 
         self.emoji_options = [get_emoji(em) for em in
                               (":one:",":two:",":three:",":four:",":five:",":six:",":seven:",":eight:",":nine:",
-                               ":keycap_ten:",":regional_indicator_a:", ":regional_indicator_b:",
-                               ":regional_indicator_c:", ":regional_indicator_d:", ":regional_indicator_e:",
-                               ":regional_indicator_f:", ":regional_indicator_g:", ":regional_indicator_h:",
-                               ":regional_indicator_i:", ":regional_indicator_j:", ":regional_indicator_k:",
-                               ":regional_indicator_l:", ":regional_indicator_m:", ":regional_indicator_n:",
-                               ":regional_indicator_o:", ":regional_indicator_p:", ":regional_indicator_q:",
-                               ":regional_indicator_r:", ":regional_indicator_s:", ":regional_indicator_t:",
-                               ":regional_indicator_u:", ":regional_indicator_v:", ":regional_indicator_w:",
-                               ":regional_indicator_x:", ":regional_indicator_y:", ":regional_indicator_z:")]
+                               ":keycap_ten:", "\N{REGIONAL INDICATOR SYMBOL LETTER A}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER B}", "\N{REGIONAL INDICATOR SYMBOL LETTER C}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER D}", "\N{REGIONAL INDICATOR SYMBOL LETTER E}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER F}", "\N{REGIONAL INDICATOR SYMBOL LETTER G}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER H}", "\N{REGIONAL INDICATOR SYMBOL LETTER I}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER J}", "\N{REGIONAL INDICATOR SYMBOL LETTER K}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER L}", "\N{REGIONAL INDICATOR SYMBOL LETTER M}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER N}", "\N{REGIONAL INDICATOR SYMBOL LETTER O}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER P}", "\N{REGIONAL INDICATOR SYMBOL LETTER Q}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER R}", "\N{REGIONAL INDICATOR SYMBOL LETTER S}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER T}", "\N{REGIONAL INDICATOR SYMBOL LETTER U}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER V}", "\N{REGIONAL INDICATOR SYMBOL LETTER W}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER X}", "\N{REGIONAL INDICATOR SYMBOL LETTER Y}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER Z}")]
 
     def load_data(self):
         '''Function for loading in json files containing the quiz information'''
@@ -112,7 +117,8 @@ class Quiz:
         title = self.name
         question = self.question
 
-        answer_options = "\n".join([f"{i+1}) {self.options[option]}" for i,option in enumerate(self.options)])
+        answer_options = "\n".join([f"{self.emoji_options[i]} ) {self.options[option]}"
+                                    for i,option in enumerate(self.options)])
 
         informational_text = "Answer with the emoji's given below. Only your final answer counts!"
 
@@ -160,6 +166,8 @@ class Quiz:
             weighted_votes = np.zeros(len(self.options)) * 100
 
         # Create a bar chart to represent the data
+        figsize = np.array([6.4,4.8])*len(self.options)/9 if len(self.options) >= 9 else (6.4,4.8)
+        plt.figure(figsize=figsize)
         barchart = plt.bar(np.array(range(1,len(self.options) + 1)), weighted_votes, width=0.4, color="r")
         plt.ylim((0,100))
         plt.gca().yaxis.set_major_formatter(PercentFormatter())
@@ -211,7 +219,27 @@ class Poll(commands.Cog):
         # This dictionary contains all the currently active quizzes
         self.quizzes = {}
         self.last_started = ''
+        self.dynamic_quiz_active = False
         self.load_quizzes()
+
+    @commands.Cog.listener()
+    async def on_message(self,ctx):
+
+        # If the message is from the bot itself or there are no dynamic quizzes, don't execute this function
+        if ctx.author.id == self.bot.user.id or not self.dynamic_quiz_active:
+            return
+
+        # If the previous check has been passed, but the message is not in the dynamic quiz channel, don't continue
+        if ctx.channel.id != self.quizzes[
+            list(filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]
+        ].channel_id:
+            return
+
+        # If it wasn't a command, the message should still be deleted
+        try:
+            await ctx.delete()
+        except:
+            return
 
     def cog_unload(self):
 
@@ -329,6 +357,52 @@ class Poll(commands.Cog):
         if new_quiz.timer:
             self.bot.loop.create_task(self.quiz_timer(new_quiz.timer,new_message))
 
+    @commands.command("dynamic", aliases=("makedynamic", "make_dynamic", "make-dynamic", "dynamicquiz", "dynamic-quiz",
+                                          "dynamic_quiz"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def make_quiz_dynamic(self,ctx):
+        # Turn on dynamic quiz mode
+        if self.last_started:
+            self.dynamic_quiz_active = True
+        await ctx.message.delete()
+
+    @commands.command("add")
+    @commands.guild_only()
+    async def add_quiz_option(self, ctx, *args):
+
+        await ctx.message.delete()
+        # If there's no dynamic quiz active, don't continue
+        if not self.dynamic_quiz_active:
+            return
+
+        addition = " ".join(args)
+
+        last_quiz = self.quizzes[list(filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]]
+
+        # That option is already in the quiz or the max amount of options has been reached
+        if addition.lower() in [option.lower() for option in last_quiz.options.values()] \
+           or len(last_quiz.options) == len(last_quiz.emoji_options):
+            return
+
+        # If the author of the message already has a vote, remove it
+        for option in last_quiz.votes:
+            if ctx.author.id in last_quiz.votes[option]:
+                last_quiz.votes[option].remove(ctx.author.id)
+
+        current_option_length = len(last_quiz.options)
+        last_quiz.options[current_option_length + 1] = addition
+        last_quiz.votes[current_option_length + 1] = [ctx.author.id]
+
+        # Now generate a new quiz embed and react with the appropriate new reaction
+        title, description, emojis = last_quiz.generate_quiz_message()
+        original_message = await ctx.message.channel.fetch_message(last_quiz.message_id)
+        original_embed = original_message.embeds[0].to_dict()
+        original_embed["description"] = description
+        await original_message.edit(embed=discord.Embed().from_dict(original_embed))
+        await original_message.add_reaction(emojis[-1])
+
+
 
     @commands.command("finishquiz", aliases=("finish-quiz", "finish_quiz", "endquiz","end_quiz","end-quiz"))
     @commands.has_permissions(administrator=True)
@@ -352,6 +426,8 @@ class Poll(commands.Cog):
             await ctx.message.delete()
 
             quiz_name = " ".join(args) if args else self.last_started
+            if not args:
+                self.last_started = None
 
             try:
                 quiz_to_finish = self.quizzes[list(filter(lambda k: self.quizzes[k].name == quiz_name, self.quizzes))[0]]
@@ -403,6 +479,9 @@ class Poll(commands.Cog):
 
         # Remove the quiz from the internal dictionary
         self.quizzes.pop(quiz_to_finish.message_id)
+
+        # If this was a dynamic quiz, disable message deletion again
+        self.dynamic_quiz_active = False
 
     @commands.command("intermediate_results", aliases=("intermediateresults", "intermediate-results", "intermediate"))
     @commands.has_permissions(administrator=True)
@@ -693,11 +772,10 @@ class Poll(commands.Cog):
         timer = timer_duration
         t = lambda x: f"{0 if x//60 < 10 else ''}{x // 60}:{0 if x % 60 < 10 else ''}{x % 60}{0 if x % 60 == 0 else ''}"
 
-        # Extract the embed from the message and get it's original title
-        embed = message_object.embeds[0]
 
         while timer > 0:
             new_timer_value = f"Time left: {t(timer)}"
+            embed = (await message_object.channel.fetch_message(message_object.id)).embeds[0]
             embed.set_footer(text=new_timer_value)
             await message_object.edit(embed=embed)
             await asyncio.sleep(1)
