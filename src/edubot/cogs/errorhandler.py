@@ -21,7 +21,10 @@ class ErrorHandler(commands.Cog):
             return
 
         # First clear the offending message
-        await ctx.message.delete()
+        try:
+            await ctx.message.delete()
+        except:
+            pass
 
         # Then do something with the error
         error = getattr(error, 'original', error)
