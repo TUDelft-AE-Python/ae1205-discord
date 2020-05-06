@@ -362,6 +362,11 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def make_quiz_dynamic(self,ctx):
+
+        """
+        Turns the last activated quiz into a dynamic quiz.
+        """
+
         # Turn on dynamic quiz mode
         if self.last_started:
             self.dynamic_quiz_active = True
@@ -370,6 +375,13 @@ class Poll(commands.Cog):
     @commands.command("add")
     @commands.guild_only()
     async def add_quiz_option(self, ctx, *args):
+
+        """
+        Add an option to a dynamic quiz.
+
+        Arguments:
+            - Option you want to add
+        """
 
         await ctx.message.delete()
         # If there's no dynamic quiz active, don't continue
