@@ -226,6 +226,9 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def save_quiz(self,ctx):
+
+        '''Save all currently active quizzes to disk.'''
+
         self.save_quizzes()
         await ctx.channel.send(f"<@{ctx.author.id}> Currently active quizzes saved!",
                                delete_after=20)
@@ -250,11 +253,12 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def start_quiz(self, ctx, fname : str, timeout : int = None):
 
-        ''' Discord command to start a quiz.
+        '''
+        Discord command to start a quiz.
 
-            Arguments:
-            - fname: The JSON file containing the quiz
-            - timeout: Timeout in seconds for each question (optional)
+        Arguments:
+        - fname: The JSON file containing the quiz
+        - timeout: Timeout in seconds for each question (optional)
         '''
 
         # Save the channel in which the message was sent
@@ -325,6 +329,9 @@ class Poll(commands.Cog):
         End a quiz and publish its results using a histogram.
         It sends the histogram to the channel where the quiz resides as well as the people who started
         and ended the quiz.
+
+        Arguments:
+            - quiz name (optional, last started quiz will be used if not provided)
         """
         # If this is the case, then this was not an internal function call and it was an actual command
         if not type(ctx) == int:
@@ -394,8 +401,12 @@ class Poll(commands.Cog):
     async def quiz_intermediate_results(self,ctx, public: str = "True", quiz_name: str = None):
 
         '''
-        Function to obtain intermediate results of a quiz. Optional parameters: public (defaults to True), quiz name
-        If no quiz name is provided, the most recent quiz is used instead.
+        Function to obtain intermediate results of a quiz.
+        Arguments:
+            - public [defaults to True] (optional)
+            - quiz name (optional, last started quiz will be used if not provided)
+        Note:
+            public parameter must also be specified if a quiz name is passed as argument
         '''
 
         if not quiz_name:
@@ -455,7 +466,27 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def create_quiz(self,ctx, *args):
 
-        '''Function to create a quiz json file using either a file attachment or a json string directly'''
+        '''
+        Function to create a quiz. Two different methods available:
+        - Method 1:
+            Provide details of quiz through pre-made json file.
+
+            Arguments:
+                - json filename [used for storing the file to disk]
+            Attachments:
+                - json file containing all quiz details
+
+        - Method 2:
+            Provide details of quiz in message directly
+
+            Arguments:
+                - quiz filename [used for storing the quiz file to disk]
+                - quiz name [used for naming the quiz and manipulating it once activated]
+                - question
+                - options [options must be given in one argument, separated by semicolon (;)]
+                - correct answer (optional)
+                - timer [specified using the following syntax: timer=xx where xx is the value in seconds] (optional)
+        '''
 
         if len(args) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> No arguments were given!",
@@ -509,14 +540,14 @@ class Poll(commands.Cog):
 
         """
         Function to create and start a quiz directly without writing it to a json file. Syntax is comparable to
-        the !makequiz command with all arguments given in the message itself, no attachments. Only the filename must
-        be left out.
+        the !makequiz command with all arguments given in the message itself (method 2), no attachments.
+        The filename must be left out as this quiz is not saved to disk. See !help makequiz for details about its usage.
         """
 
         if not len(args) >= 3:
-            await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Either attach the json file to "
-                                   f"the message and provide the filename as argument or provide filename, quiz name, "
-                                   f"question, answers and, if applicable, the correct response as separate arguments.",
+            await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Provide quiz name, "
+                                   f"question, answers and, if applicable, the correct response and timer value"
+                                   f"as separate arguments.",
                                    delete_after=20)
             await ctx.message.delete()
             return
@@ -600,7 +631,12 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def inspect_quiz_json(self,ctx,*args):
 
-        '''Function to send stored json file via private message to the user'''
+        '''
+        Send the specified quiz json file to the user via a direct message.
+
+        Arguments:
+            - quiz filename
+        '''
 
         filename = " ".join(args)
         filename += ".json" if ".json" not in filename else ""
@@ -621,7 +657,12 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def remove_quiz(self,ctx,*args):
 
-        '''Function to remove a stored json file'''
+        '''
+        Function to remove a stored json file.
+
+        Arguments:
+            - quiz filename
+        '''
 
         filename = " ".join(args)
         filename += ".json" if ".json" not in filename else ""
