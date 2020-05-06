@@ -393,8 +393,12 @@ class Poll(commands.Cog):
         last_quiz = self.quizzes[list(filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]]
 
         # That option is already in the quiz or the max amount of options has been reached
-        if addition.lower() in [option.lower() for option in last_quiz.options.values()] \
-           or len(last_quiz.options) == len(last_quiz.emoji_options):
+        if len(last_quiz.options) == len(last_quiz.emoji_options):
+            return
+        options = [option.lower() for option in last_quiz.options.values()]
+        if addition.lower() in options:
+            vote_index = options.index(addition.lower())
+            last_quiz.vote(ctx.author.id, last_quiz.emoji_options[vote_index])
             return
 
         # If the author of the message already has a vote, remove it

@@ -41,6 +41,7 @@ except ImportError as e:  # Edubot is not installed
         raise e
 
 TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = "Njk4MTU2MDE4MDY0MDMxODA1.XpiExw.V-noSQQQfMbG8zyy_DXIdZ-ukRc"
 
 
 class BotRunner:
