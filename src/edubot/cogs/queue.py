@@ -172,6 +172,7 @@ class ReviewQueue(Queue):
         super().__init__(qid, guildname, channame)
         self.assigned = dict()
         self.indicator = None
+        self.assignments = []
 
     async def takenext(self, ctx):
         ''' Take the next student from the queue. '''
@@ -254,7 +255,7 @@ class ReviewQueue(Queue):
         for idx, member  in enumerate(self.queue[:3]):
             msg += f'{idx+1}: <@{member}>\n'
         msg += '\n\nType !ready to enter the queue when you\n also want to hand in your assignment!'
-        embed = discord.Embed(title="Next up for review:",
+        embed = discord.Embed(title=f"Queue for assignments {', '.join(i for i in self.assignments)}",
                               description=msg, colour=0xae8b0c)
         # Delete previous indicator
         if self.indicator is not None:
@@ -262,6 +263,21 @@ class ReviewQueue(Queue):
 
         # Send new indicator
         self.indicator = await ctx.channel.send(embed=embed)
+
+    async def startReviewing(self, ctx, aid):
+        if aid not in self.assignments:
+            self.assignments.append(aid)
+            self.assignments.sort()
+            await self.updateIndicator(ctx)
+        else:
+            ctx.send(f"Assignment {aid} is already being reviewed.", delete_after=5)
+
+    async def stopReviewing(self, ctx, aid):
+        if aid in self.assignments:
+            self.assignments.remove(aid)
+            await self.updateIndicator(ctx)
+        else:
+            ctx.send(f"Assignment {aid} was not being reviewed.", delete_after=5)
 
 class QuestionQueue(Queue):
     qtype = 'Question'
@@ -602,3 +618,16 @@ class QueueCog(commands.Cog):
             # Member is passed, add him/her to the queue
             await Queue.queues[qid].add(ctx, member.id)
         await Queue.queues[qid].updateIndicator(ctx)
+
+    @commands.command('toggle', aliases=('toggleReview',))
+    @commands.check(lambda  ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.has_permissions(administrator=True)
+    async def toggleReview(self, ctx, aid):
+        qid = (ctx.guild.id, ctx.channel.id)
+        await ctx.message.delete()
+        if aid is None:
+            await ctx.send(f'Command requires an assignment number', delete_after=5)
+        elif aid in Queue.queues[qid].assignments:
+            await Queue.queues[qid].stopReviewing(ctx, aid)
+        else:
+            await Queue.queues[qid].startReviewing(ctx, aid)
