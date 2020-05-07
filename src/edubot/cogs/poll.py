@@ -33,6 +33,7 @@ class Quiz:
         self.timer = None
 
         self.votes = {}
+        self.singlevote = True
 
         self.emoji_options = [get_emoji(em) for em in
                               (":one:",":two:",":three:",":four:",":five:",":six:",":seven:",":eight:",":nine:",
@@ -61,7 +62,8 @@ class Quiz:
             self.options = {i+1: str(option) for i,option in enumerate(json_data["options"])}
 
             self.correct_answer = json_data.get('correct', None)
-            self.votes = {i+1: [] for i in range(len(self.options))}
+            self.votes = {i+1: set() for i in range(len(self.options))}
+            self.singlevote = json_data.get('singlevote', True)
 
             # When the  file is read in, the timer specified there is used as a baseline. !makequiz and !startquiz
             # Can overwrite this value
@@ -87,6 +89,7 @@ class Quiz:
             options=self.options,
             owner=self.owner,
             votes=self.votes,
+            singlevote=self.singlevote,
             timer=self.timer,
             counted_votes={self.options[index]: len(self.votes[index]) for index in range(1, len(self.options) + 1)}
         )
@@ -105,6 +108,7 @@ class Quiz:
         self.correct_answer = None if not save_dict["correct"] else int(save_dict["correct"])
         self.owner = int(save_dict["owner"])
         self.votes = save_dict["votes"]
+        self.singlevote = save_dict.get("singlevote", True)
         self.timer = None if not save_dict["timer"] else int(save_dict["timer"])
 
 
@@ -120,7 +124,8 @@ class Quiz:
         answer_options = "\n".join([f"{self.emoji_options[i]} ) {self.options[option]}"
                                     for i,option in enumerate(self.options)])
 
-        informational_text = "Answer with the emoji's given below. Only your final answer counts!"
+        informational_text = "Answer with the emoji's given below." + \
+            ("Only your final answer counts!" if self.singlevote else "You can select multiple answers.")
 
         description = "\n\n".join([question, answer_options, informational_text])
 
@@ -141,7 +146,7 @@ class Quiz:
             if voter_id in self.votes[option]:
                 self.votes[option].remove(voter_id)
         # Cast the vote
-        self.votes[self.emoji_options.index(emoji) + 1].append(voter_id)
+        self.votes[self.emoji_options.index(emoji) + 1].add(voter_id)
 
 
     def create_histogram(self):
@@ -371,6 +376,25 @@ class Poll(commands.Cog):
         if self.last_started:
             self.dynamic_quiz_active = True
         await ctx.message.delete()
+
+    @commands.command("allow-multiple", aliases=("allowmult"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def set_allow_multiple(self, ctx):
+        '''
+            Turns the last activated quiz in a quiz where
+            multiple answers are allowed per user.
+        '''
+        if self.last_started:
+            last_quiz = self.quizzes[self.last_started]
+            last_quiz.singlevote = False
+            
+            # Now generate a new quiz embed and react with the appropriate new reaction
+            title, description, emojis = last_quiz.generate_quiz_message()
+            original_message = await ctx.message.channel.fetch_message(last_quiz.message_id)
+            original_embed = original_message.embeds[0].to_dict()
+            original_embed["description"] = description
+            await original_message.edit(embed=discord.Embed().from_dict(original_embed))
 
     @commands.command("add")
     @commands.guild_only()
