@@ -142,9 +142,10 @@ class Quiz:
             return
 
         # Delete the voter_id from all options
-        for option in self.votes:
-            if voter_id in self.votes[option]:
-                self.votes[option].remove(voter_id)
+        if self.singlevote:
+            for option in self.votes:
+                if voter_id in self.votes[option]:
+                    self.votes[option].remove(voter_id)
         # Cast the vote
         self.votes[self.emoji_options.index(emoji) + 1].add(voter_id)
 
@@ -433,7 +434,7 @@ class Poll(commands.Cog):
 
         current_option_length = len(last_quiz.options)
         last_quiz.options[current_option_length + 1] = addition
-        last_quiz.votes[current_option_length + 1] = [ctx.author.id]
+        last_quiz.votes[current_option_length + 1] = {ctx.author.id}
 
         # Now generate a new quiz embed and react with the appropriate new reaction
         title, description, emojis = last_quiz.generate_quiz_message()
@@ -701,7 +702,7 @@ class Poll(commands.Cog):
         newquiz.name = quiz_name
         newquiz.question = question
         newquiz.options = {i+1: str(option) for i,option in enumerate(options_parsed)}
-        newquiz.votes = {i+1: [] for i in range(len(options_parsed))}
+        newquiz.votes = {i+1: set() for i in range(len(options_parsed))}
         newquiz.correct_answer = correct
         newquiz.timer = timer_value
 
