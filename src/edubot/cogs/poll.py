@@ -377,7 +377,7 @@ class Poll(commands.Cog):
             self.dynamic_quiz_active = True
         await ctx.message.delete()
 
-    @commands.command("allow-multiple", aliases=("allowmult"))
+    @commands.command("allow-multiple", aliases=("allowmult","allow_mult", "allow_multiple"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def set_allow_multiple(self, ctx):
