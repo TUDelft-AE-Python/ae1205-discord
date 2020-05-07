@@ -386,7 +386,8 @@ class Poll(commands.Cog):
             multiple answers are allowed per user.
         '''
         if self.last_started:
-            last_quiz = self.quizzes[self.last_started]
+            last_quiz = self.quizzes[list(
+                filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]]
             last_quiz.singlevote = False
             
             # Now generate a new quiz embed and react with the appropriate new reaction
