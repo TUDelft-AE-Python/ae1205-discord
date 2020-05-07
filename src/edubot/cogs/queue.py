@@ -279,6 +279,225 @@ class ReviewQueue(Queue):
         else:
             ctx.send(f"Assignment {aid} was not being reviewed.", delete_after=5)
 
+class MultiReviewQueue(Queue):
+    qtype = 'MultiReview'
+
+    class Student:
+        def __init__(self, uid):
+            self.id = uid
+            self.aid = []
+
+    def __init__(self, qid, guildname, channame):
+        super().__init__(qid, guildname, channame)
+        self.queue = OrderedDict()
+        self.studentsQueued = {}
+        self.assignments = []
+        self.assigned = dict()
+
+    async def add(self, ctx, uid, aid=None):
+        # print('entered add function')
+        # print(f'uid: {uid}\t aid: {aid}')
+        # Delete the triggering
+        try:
+            await ctx.message.delete()
+        except:
+            pass
+
+        # Find if user is already in a queue
+        student = self.studentsQueued.get(uid, None)
+        # print(f'student found or not: {student}')
+
+        # Use !ready to display which assignments they've handed in already
+        # Parallels the use of the !follow command in the question queue
+        if aid is None:
+            msg = "The following assignments are being handled: " + \
+                ', '.join(str(i) for i in self.assignments) + '\n'
+
+            if student is None:
+                msg += f'<@{uid}>, you currently have not joined any queues'
+            else:
+                readied = student.aid
+                plural = (True if len(readied) > 1 else False)
+                msg += f'<@{uid}>, you have joined the following queue' + \
+                       ('s: ' if plural else ': ') + \
+                       f'{", ".join(str(i) for i in readied)}'
+                msg += "\nYou are at positions:\n"
+                for queue in readied:
+                    msg += f"Position in queue {queue}: {self.queue[queue].index(uid)+1} of {len(self.queue[queue])}\n"
+            await ctx.channel.send(msg, delete_after=20)
+            return
+
+        # print('student specific queue display handled')
+
+        # If student doesn't yet exist, create student
+        if student is None:
+            student = MultiReviewQueue.Student(uid)
+            self.studentsQueued[uid] = student
+        # print('created student')
+
+        # Check queue exists and student not in it
+        if aid in self.assignments and aid not in student.aid:
+            # print('queue exists, student adding')
+            student.aid.append(aid)
+            self.queue[aid].append(student.id)
+            msg = f"<@{uid}>, you've been added to assignment {aid}'s queue at position {len(self.queue[aid])}"
+        # Queue exists, but student already in it
+        elif aid in student.aid:
+            # print('queue exists, student already in')
+            pos = self.queue[aid].index(student.id)
+            msg = f"Hi <@{student.id}>! For assignmen {aid}, " + \
+                (f'there are still {pos} people waiting in front of you.' if pos else
+                    'you are next in line!')
+        # Queue doesn't exist
+        else:
+            # print('queue nonexistant')
+            msg = f"Hi <@{student.id}>! We aren't reviewing that assignment yet, so you'll have to wait until we open that queue."
+        await ctx.send(msg, delete_after=10)
+
+    async def takenext(self, ctx, aid=None):
+        print('enter takenext')
+        print(f'aid: {aid}')
+        ''' Take the next student from the queue. Optionally add the queue number'''
+        # In case TAs forget to specify which queue, default to first
+        # non-empty queue
+        if aid is None:
+            aidIter = iter(self.queue)
+            aid = next(aidIter)
+            while len(self.queue[aid]) == 0:
+                aid = next(aidIter)
+        print(f'aid: {aid}')
+        # Get the voice channel of the caller
+        cv = getvoicechan(ctx.author)
+        if cv is None:
+            await ctx.send(f'<@{ctx.author.id}>: Please select a voice channel first where you want to interview the student!', delete_after=10)
+            return
+        if not self.queue[aid]:
+            await ctx.send(f'<@{ctx.author.id}>: Hurray, queue {aid} is empty! Might want to check the other ones now', delete_after=20)
+            return
+
+        # Get the next student in the queue
+        print('get uid')
+        uid = self.queue[aid].pop(0)
+        print(f'uid: {uid}. Now getting member')
+        member = await ctx.guild.fetch_member(uid)
+        print(f'member: {member}')
+        unready = []
+        while self.queue[aid] and not readymovevoice(member):
+            print(f'unready while loop entered for {uid}|{member.name}')
+            await self.bot.dm(member.id, f'You were invited by a TA, but you\'re not in a voice channel yet!'
+                              'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
+            # Store the studentID to place them back in the queue, and get the next one to try
+            unready.append(uid)
+            if self.queue[aid]:
+                uid = self.queue[aid].pop(0)
+                member = await ctx.guild.fetch_member(uid)
+            else:
+                await ctx.send(f'<@{ctx.author.id}> : There\'s noone in queue {aid} who is ready (in a voice lounge)!', delete_after=10)
+                self.queue[aid] = unready
+                return
+        print('managed unready queue')
+        # Placement of unready depends on the length of the queue left. Priority goes
+        # to those who are ready, but doesn't send unready to the end of the queue.
+        if len(self.queue[aid]) <= len(unready):
+            self.queue[aid] += unready
+        else:
+            insertPos = min(len(self.queue[aid]) // 2, 10)
+            self.queue[aid] = self.queue[aid][:insertPos] + unready + self.queue[aid][insertPos:]
+        print('restored old queue, now moving student to TA')
+
+        # move the student to the callee's voice channel, and store him/her
+        # as assigned for the caller. First remove previous assignee from
+        # all queues (assumes they passed all assignments they checked)
+        print('check and clear old student')
+        prevStudent = self.assigned.get(ctx.author.id, None)
+        if prevStudent:
+            print('entered prevStudent if statement')
+            self.studentsQueued.pop(prevStudent.id)
+            for handin in prevStudent.aid:
+                self.queue[handin].remove(prevStudent.id)
+            del prevStudent.oldVC
+            del prevStudent.qid
+
+        print('assign student to TA')
+        newStudent = self.studentsQueued[uid]
+        newStudent.oldVC = getvoicechan(member)
+        newStudent.qid = self.qid # I saw in the original putback you pass qid, couldn't see what for
+        self.assigned[ctx.author.id] = newStudent
+        await member.edit(voice_channel=cv)
+
+        print('ping next in line')
+        # are there still students in the queue?
+        if self.queue[aid]:
+            member = await ctx.guild.fetch_member(self.queue[aid][0])
+            await self.bot.dm(member,
+                              f'Get ready! You\'re next in line for the queue in <#{ctx.channel.id}>!' +
+                              ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+            if len(self.queue[aid]) > 1:
+                # Also send a message to the third person in the queue
+                member = await ctx.guild.fetch_member(self.queue[aid][1])
+                await self.bot.dm(member,
+                                  f'Almost there {member.name}, You\'re second in line for the queue in <#{ctx.channel.id}>!' +
+                                  ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+            if len(self.queue[aid]) > 5:
+                # Also send a message to the fifth person in the queue
+                member = await ctx.guild.fetch_member(self.queue[aid][4])
+                await self.bot.dm(member,
+                                  f'Your patience will soon be rewarded, {member.name}... You\'re fifth in line for the queue in <#{ctx.channel.id}>!' +
+                                  '' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!')
+
+    async def putback(self, ctx, pos):
+        ''' Put the student you currently have in your voice channel back in the queue. Requires assignment number'''
+        student = self.assigned.get(
+            ctx.author.id, None)
+        if not student:
+            await ctx.send(f'<@{ctx.author.id}>: You don\'t have a student assigned to you yet!', delete_after=10)
+        else:
+            uid = student.id
+            for handin in student.aid:
+                self.queue[handin].insert(pos, uid)
+            member = await ctx.guild.fetch_member(uid)
+            if readymovevoice(member):
+                await member.edit(voice_channel=student.oldVC)
+            await self.bot.dm(member, 'You were moved back into the queue, probably because you didn\'t respond.')
+
+    async def updateIndicator(self, ctx):
+        '''Floating indicator displaying next in line and length of queue. Not implemented for MultiReview
+
+        Not a command invoked by a user, but by changes in the queue.'''
+        # msg = f'**Length of queue:** {len(self.queue)}.\n'+ \
+        #         'Next three in queue:\n'
+        # for idx, member  in enumerate(self.queue[:3]):
+        #     msg += f'{idx+1}: <@{member}>\n'
+        # msg += '\n\nType !ready to enter the queue when you\n also want to hand in your assignment!'
+        # embed = discord.Embed(title=f"Queue for assignments {', '.join(i for i in self.assignments)}",
+        #                       description=msg, colour=0xae8b0c)
+        # # Delete previous indicator
+        # if self.indicator is not None:
+        #     await self.indicator.delete()
+
+        # # Send new indicator
+        # self.indicator = await ctx.channel.send(embed=embed)
+        pass
+
+    async def startReviewing(self, ctx, aid):
+        """Not implemented in MultiReview"""
+        if aid not in self.assignments:
+            self.assignments.append(aid)
+            self.queue[aid] = []
+            self.assignments.sort()
+            # await self.updateIndicator(ctx)
+            await ctx.send(f'Added queue for assignment {aid}')
+        else:
+            ctx.send(f"Assignment {aid} is already being reviewed.", delete_after=5)
+
+    async def stopReviewing(self, ctx, aid):
+        """Not implemented in MultiReview"""
+        if aid in self.assignments:
+            self.assignments.remove(aid)
+            # await self.updateIndicator(ctx)
+            await ctx.send(f'Incorrectly removed queue for assignment {aid}')
+        else:
+            ctx.send(f"Assignment {aid} was not being reviewed.", delete_after=5)
 class QuestionQueue(Queue):
     qtype = 'Question'
 
@@ -455,17 +674,20 @@ class QueueCog(commands.Cog):
         await ctx.send(Queue.loadall())
 
     @commands.command()
-    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    # @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def takenext(self, ctx):
         """ Take the next in line from the queue. """
         qid = (ctx.guild.id, ctx.channel.id)
-        await ctx.message.delete()
+        try:
+            await ctx.message.delete()
+        except:
+            pass
         await Queue.queues[qid].takenext(ctx)
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
-    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    # @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def putback(self, ctx, pos : int = 10):
         ''' Put the student you currently have in your voice channel back in the queue.
@@ -474,7 +696,10 @@ class QueueCog(commands.Cog):
             - pos: The position in the queue to put the student. (optional)
               Default position is 10. '''
         qid = (ctx.guild.id, ctx.channel.id)
-        await ctx.message.delete()
+        try:
+            await ctx.message.delete()
+        except:
+            pass
         await Queue.queues[qid].putback(ctx, pos)
         await Queue.queues[qid].updateIndicator(ctx)
 
@@ -505,11 +730,17 @@ class QueueCog(commands.Cog):
         await ctx.send(Queue.load((ctx.guild.id, ctx.channel.id)))
 
     @commands.command(aliases=('ready', 'done'))
-    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    # @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
     async def queueme(self, ctx, *args):
         """ Add me to the queue in this channel. """
+        print('outer queueme command')
+        print([i for i in args])
         qid = (ctx.guild.id, ctx.channel.id)
-        await Queue.queues[qid].add(ctx, ctx.author.id)
+        print('past qid')
+        if len(args)>0:
+            await Queue.queues[qid].add(ctx, ctx.author.id, args[0])
+        else:
+            await Queue.queues[qid].add(ctx, ctx.author.id)
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
@@ -620,7 +851,7 @@ class QueueCog(commands.Cog):
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command('toggle', aliases=('toggleReview',))
-    @commands.check(lambda  ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.check(lambda  ctx: Queue.qcheck(ctx, 'MultiReview'))
     @commands.has_permissions(administrator=True)
     async def toggleReview(self, ctx, aid):
         qid = (ctx.guild.id, ctx.channel.id)
