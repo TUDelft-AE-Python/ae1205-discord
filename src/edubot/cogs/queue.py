@@ -71,7 +71,7 @@ class Queue:
             await ctx.send('This channel doesn\'t have a queue!', delete_after=20)
             await ctx.message.delete(delay=20)
             return False
-        if not qtype or qtype == queue.qtype:
+        if not qtype or qtype == queue.qtype or queue.qtype in qtype:
             return True
         await ctx.send(f'{ctx.invoked_with} is not a recognised command for the queue in this channel!', delete_after=20)
         await ctx.message.delete(delay=20)
@@ -677,7 +677,7 @@ class QueueCog(commands.Cog):
         await ctx.send(Queue.loadall())
 
     @commands.command()
-    # @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.check(lambda ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     @commands.has_permissions(administrator=True)
     async def takenext(self, ctx):
         """ Take the next in line from the queue. """
@@ -690,7 +690,7 @@ class QueueCog(commands.Cog):
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
-    # @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.check(lambda ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     @commands.has_permissions(administrator=True)
     async def putback(self, ctx, pos : int = 10):
         ''' Put the student you currently have in your voice channel back in the queue.
@@ -733,7 +733,7 @@ class QueueCog(commands.Cog):
         await ctx.send(Queue.load((ctx.guild.id, ctx.channel.id)))
 
     @commands.command(aliases=('ready', 'done'))
-    # @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.check(lambda ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     async def queueme(self, ctx, *args):
         """ Add me to the queue in this channel. """
         print('outer queueme command')
@@ -854,7 +854,7 @@ class QueueCog(commands.Cog):
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command('toggle', aliases=('toggleReview',))
-    @commands.check(lambda  ctx: Queue.qcheck(ctx, 'MultiReview'))
+    @commands.check(lambda  ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     @commands.has_permissions(administrator=True)
     async def toggleReview(self, ctx, aid):
         qid = (ctx.guild.id, ctx.channel.id)
