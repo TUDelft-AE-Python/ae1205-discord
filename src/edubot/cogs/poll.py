@@ -80,6 +80,10 @@ class Quiz:
 
         '''Function to store all data needed to reconstruct the class'''
 
+        # Convert the vote sets to lists in order to be saved in a json file
+        converted_votes = {key: list(data) for key,data in self.votes.items()}
+
+        # Create the save dict
         toreturn = dict(
             name=self.name,
             messageid=self.message_id,
@@ -88,10 +92,11 @@ class Quiz:
             correct=self.correct_answer,
             options=self.options,
             owner=self.owner,
-            votes=self.votes,
+            votes=converted_votes,
             singlevote=self.singlevote,
             timer=self.timer,
-            counted_votes={self.options[index]: len(self.votes[index]) for index in range(1, len(self.options) + 1)}
+            counted_votes={self.options[index]: len(self.votes[index])
+                           for index in range(1, len(self.options) + 1)}
         )
 
         return toreturn
@@ -104,13 +109,18 @@ class Quiz:
         self.message_id = int(save_dict["messageid"])
         self.channel_id = int(save_dict["channelid"])
         self.question = save_dict["question"]
+
         self.options = save_dict["options"]
+        self.options = {int(key): option for key,option in self.options.items()}
+
         self.correct_answer = None if not save_dict["correct"] else int(save_dict["correct"])
         self.owner = int(save_dict["owner"])
+
         self.votes = save_dict["votes"]
+        self.votes = {int(key): set(data) for key,data in self.votes.items()}
+
         self.singlevote = save_dict.get("singlevote", True)
         self.timer = None if not save_dict["timer"] else int(save_dict["timer"])
-
 
         return self
 
@@ -262,6 +272,11 @@ class Poll(commands.Cog):
 
         save_dict = {message_id: self.quizzes[message_id].create_save_data() for message_id in self.quizzes}
 
+        save_dict["last_started"] = self.last_started
+
+        save_dict["dynamic_active"] = self.dynamic_quiz_active
+
+
         with open(self.save_filepath, 'w') as file:
             json.dump(save_dict,file)
 
@@ -272,10 +287,11 @@ class Poll(commands.Cog):
 
         '''Save all currently active quizzes to disk.'''
 
+        await ctx.message.delete()
+
         self.save_quizzes()
         await ctx.channel.send(f"<@{ctx.author.id}> Currently active quizzes saved!",
                                delete_after=20)
-        await ctx.message.delete()
 
     def load_quizzes(self):
         '''Function to load the pickle object containing all the currently active quizzes'''
@@ -287,8 +303,33 @@ class Poll(commands.Cog):
         with open(self.save_filepath, 'r') as file:
             json_data = json.load(file)
 
+        self.last_started = json_data.get("last_started", None)
+        self.dynamic_quiz_active = json_data.get("dynamic_active", False)
+        json_data.pop("last_started", None)
+        json_data.pop("dynamic_active", None)
+
         self.quizzes = {int(message_id): Quiz(None,None).load_from_save_data(json_data[message_id])
                         for message_id in json_data}
+
+        print(f"Quiz system loaded with following parameters:\n"
+              f"- Active quizzes: {len(self.quizzes)}\n"
+              f"- Last quiz started: {self.last_started}\n"
+              f"- Dynamic quiz active: {self.dynamic_quiz_active}")
+
+    @commands.command("quiz-status", aliases=("quizstatus", "quiz_status"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def get_quiz_system_status(self, ctx):
+        await ctx.message.delete()
+        status = \
+            f"""
+            ** Currently active quizzes: ** {len(self.quizzes)}
+            ** Last started quiz: **        {self.last_started}
+            ** Dynamic quiz active: **      {self.dynamic_quiz_active}            
+            """
+        embed = discord.Embed(title="Quiz system status", description=status, colour=0x25a52b)
+        await ctx.message.channel.send(embed=embed, delete_after=20)
+
 
     @commands.command("startquiz", aliases=("start-quiz","start_quiz","quiz","beginquiz","begin-quiz",
                                             "begin_quiz","launchquiz","launch_quiz","launch-quiz"))
@@ -386,11 +427,14 @@ class Poll(commands.Cog):
             Turns the last activated quiz in a quiz where
             multiple answers are allowed per user.
         '''
+
+        await ctx.message.delete()
+
         if self.last_started:
             last_quiz = self.quizzes[list(
                 filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]]
             last_quiz.singlevote = False
-            
+
             # Now generate a new quiz embed and react with the appropriate new reaction
             title, description, emojis = last_quiz.generate_quiz_message()
             original_message = await ctx.message.channel.fetch_message(last_quiz.message_id)
@@ -427,14 +471,11 @@ class Poll(commands.Cog):
             last_quiz.vote(ctx.author.id, last_quiz.emoji_options[vote_index])
             return
 
-        # If the author of the message already has a vote, remove it
-        for option in last_quiz.votes:
-            if ctx.author.id in last_quiz.votes[option]:
-                last_quiz.votes[option].remove(ctx.author.id)
-
         current_option_length = len(last_quiz.options)
         last_quiz.options[current_option_length + 1] = addition
-        last_quiz.votes[current_option_length + 1] = {ctx.author.id}
+        last_quiz.votes[current_option_length + 1] = set()
+
+        last_quiz.vote(ctx.author.id, last_quiz.emoji_options[current_option_length])
 
         # Now generate a new quiz embed and react with the appropriate new reaction
         title, description, emojis = last_quiz.generate_quiz_message()
