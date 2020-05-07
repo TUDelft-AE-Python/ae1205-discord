@@ -33,9 +33,24 @@ class Quiz:
         self.timer = None
 
         self.votes = {}
+        self.singlevote = True
 
         self.emoji_options = [get_emoji(em) for em in
-                              (":one:",":two:",":three:",":four:",":five:",":six:",":seven:",":eight:",":nine:")]
+                              (":one:",":two:",":three:",":four:",":five:",":six:",":seven:",":eight:",":nine:",
+                               ":keycap_ten:", "\N{REGIONAL INDICATOR SYMBOL LETTER A}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER B}", "\N{REGIONAL INDICATOR SYMBOL LETTER C}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER D}", "\N{REGIONAL INDICATOR SYMBOL LETTER E}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER F}", "\N{REGIONAL INDICATOR SYMBOL LETTER G}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER H}", "\N{REGIONAL INDICATOR SYMBOL LETTER I}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER J}", "\N{REGIONAL INDICATOR SYMBOL LETTER K}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER L}", "\N{REGIONAL INDICATOR SYMBOL LETTER M}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER N}", "\N{REGIONAL INDICATOR SYMBOL LETTER O}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER P}", "\N{REGIONAL INDICATOR SYMBOL LETTER Q}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER R}", "\N{REGIONAL INDICATOR SYMBOL LETTER S}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER T}", "\N{REGIONAL INDICATOR SYMBOL LETTER U}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER V}", "\N{REGIONAL INDICATOR SYMBOL LETTER W}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER X}", "\N{REGIONAL INDICATOR SYMBOL LETTER Y}",
+                               "\N{REGIONAL INDICATOR SYMBOL LETTER Z}")]
 
     def load_data(self):
         '''Function for loading in json files containing the quiz information'''
@@ -47,7 +62,8 @@ class Quiz:
             self.options = {i+1: str(option) for i,option in enumerate(json_data["options"])}
 
             self.correct_answer = json_data.get('correct', None)
-            self.votes = {i+1: [] for i in range(len(self.options))}
+            self.votes = {i+1: set() for i in range(len(self.options))}
+            self.singlevote = json_data.get('singlevote', True)
 
             # When the  file is read in, the timer specified there is used as a baseline. !makequiz and !startquiz
             # Can overwrite this value
@@ -73,6 +89,7 @@ class Quiz:
             options=self.options,
             owner=self.owner,
             votes=self.votes,
+            singlevote=self.singlevote,
             timer=self.timer,
             counted_votes={self.options[index]: len(self.votes[index]) for index in range(1, len(self.options) + 1)}
         )
@@ -91,6 +108,7 @@ class Quiz:
         self.correct_answer = None if not save_dict["correct"] else int(save_dict["correct"])
         self.owner = int(save_dict["owner"])
         self.votes = save_dict["votes"]
+        self.singlevote = save_dict.get("singlevote", True)
         self.timer = None if not save_dict["timer"] else int(save_dict["timer"])
 
 
@@ -103,9 +121,11 @@ class Quiz:
         title = self.name
         question = self.question
 
-        answer_options = "\n".join([f"{i+1}) {self.options[option]}" for i,option in enumerate(self.options)])
+        answer_options = "\n".join([f"{self.emoji_options[i]} ) {self.options[option]}"
+                                    for i,option in enumerate(self.options)])
 
-        informational_text = "Answer with the emoji's given below. Only your final answer counts!"
+        informational_text = "Answer with the emoji's given below." + \
+            ("Only your final answer counts!" if self.singlevote else "You can select multiple answers.")
 
         description = "\n\n".join([question, answer_options, informational_text])
 
@@ -122,11 +142,12 @@ class Quiz:
             return
 
         # Delete the voter_id from all options
-        for option in self.votes:
-            if voter_id in self.votes[option]:
-                self.votes[option].remove(voter_id)
+        if self.singlevote:
+            for option in self.votes:
+                if voter_id in self.votes[option]:
+                    self.votes[option].remove(voter_id)
         # Cast the vote
-        self.votes[self.emoji_options.index(emoji) + 1].append(voter_id)
+        self.votes[self.emoji_options.index(emoji) + 1].add(voter_id)
 
 
     def create_histogram(self):
@@ -151,6 +172,8 @@ class Quiz:
             weighted_votes = np.zeros(len(self.options)) * 100
 
         # Create a bar chart to represent the data
+        figsize = np.array([6.4,4.8])*len(self.options)/9 if len(self.options) >= 9 else (6.4,4.8)
+        plt.figure(figsize=figsize)
         barchart = plt.bar(np.array(range(1,len(self.options) + 1)), weighted_votes, width=0.4, color="r")
         plt.ylim((0,100))
         plt.gca().yaxis.set_major_formatter(PercentFormatter())
@@ -202,7 +225,27 @@ class Poll(commands.Cog):
         # This dictionary contains all the currently active quizzes
         self.quizzes = {}
         self.last_started = ''
+        self.dynamic_quiz_active = False
         self.load_quizzes()
+
+    @commands.Cog.listener()
+    async def on_message(self,ctx):
+
+        # If the message is from the bot itself or there are no dynamic quizzes, don't execute this function
+        if ctx.author.id == self.bot.user.id or not self.dynamic_quiz_active:
+            return
+
+        # If the previous check has been passed, but the message is not in the dynamic quiz channel, don't continue
+        if ctx.channel.id != self.quizzes[
+            list(filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]
+        ].channel_id:
+            return
+
+        # If it wasn't a command, the message should still be deleted
+        try:
+            await ctx.delete()
+        except:
+            return
 
     def cog_unload(self):
 
@@ -226,6 +269,9 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def save_quiz(self,ctx):
+
+        '''Save all currently active quizzes to disk.'''
+
         self.save_quizzes()
         await ctx.channel.send(f"<@{ctx.author.id}> Currently active quizzes saved!",
                                delete_after=20)
@@ -250,11 +296,12 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def start_quiz(self, ctx, fname : str, timeout : int = None):
 
-        ''' Discord command to start a quiz.
+        '''
+        Discord command to start a quiz.
 
-            Arguments:
-            - fname: The JSON file containing the quiz
-            - timeout: Timeout in seconds for each question (optional)
+        Arguments:
+        - fname: The JSON file containing the quiz
+        - timeout: Timeout in seconds for each question (optional)
         '''
 
         # Save the channel in which the message was sent
@@ -316,6 +363,88 @@ class Poll(commands.Cog):
         if new_quiz.timer:
             self.bot.loop.create_task(self.quiz_timer(new_quiz.timer,new_message))
 
+    @commands.command("dynamic", aliases=("makedynamic", "make_dynamic", "make-dynamic", "dynamicquiz", "dynamic-quiz",
+                                          "dynamic_quiz"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def make_quiz_dynamic(self,ctx):
+
+        """
+        Turns the last activated quiz into a dynamic quiz.
+        """
+
+        # Turn on dynamic quiz mode
+        if self.last_started:
+            self.dynamic_quiz_active = True
+        await ctx.message.delete()
+
+    @commands.command("allow-multiple", aliases=("allowmult","allow_mult", "allow_multiple"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def set_allow_multiple(self, ctx):
+        '''
+            Turns the last activated quiz in a quiz where
+            multiple answers are allowed per user.
+        '''
+        if self.last_started:
+            last_quiz = self.quizzes[list(
+                filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]]
+            last_quiz.singlevote = False
+            
+            # Now generate a new quiz embed and react with the appropriate new reaction
+            title, description, emojis = last_quiz.generate_quiz_message()
+            original_message = await ctx.message.channel.fetch_message(last_quiz.message_id)
+            original_embed = original_message.embeds[0].to_dict()
+            original_embed["description"] = description
+            await original_message.edit(embed=discord.Embed().from_dict(original_embed))
+
+    @commands.command("add")
+    @commands.guild_only()
+    async def add_quiz_option(self, ctx, *args):
+
+        """
+        Add an option to a dynamic quiz.
+
+        Arguments:
+            - Option you want to add
+        """
+
+        await ctx.message.delete()
+        # If there's no dynamic quiz active, don't continue
+        if not self.dynamic_quiz_active:
+            return
+
+        addition = " ".join(args)
+
+        last_quiz = self.quizzes[list(filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]]
+
+        # That option is already in the quiz or the max amount of options has been reached
+        if len(last_quiz.options) == len(last_quiz.emoji_options):
+            return
+        options = [option.lower() for option in last_quiz.options.values()]
+        if addition.lower() in options:
+            vote_index = options.index(addition.lower())
+            last_quiz.vote(ctx.author.id, last_quiz.emoji_options[vote_index])
+            return
+
+        # If the author of the message already has a vote, remove it
+        for option in last_quiz.votes:
+            if ctx.author.id in last_quiz.votes[option]:
+                last_quiz.votes[option].remove(ctx.author.id)
+
+        current_option_length = len(last_quiz.options)
+        last_quiz.options[current_option_length + 1] = addition
+        last_quiz.votes[current_option_length + 1] = {ctx.author.id}
+
+        # Now generate a new quiz embed and react with the appropriate new reaction
+        title, description, emojis = last_quiz.generate_quiz_message()
+        original_message = await ctx.message.channel.fetch_message(last_quiz.message_id)
+        original_embed = original_message.embeds[0].to_dict()
+        original_embed["description"] = description
+        await original_message.edit(embed=discord.Embed().from_dict(original_embed))
+        await original_message.add_reaction(emojis[-1])
+
+
 
     @commands.command("finishquiz", aliases=("finish-quiz", "finish_quiz", "endquiz","end_quiz","end-quiz"))
     @commands.has_permissions(administrator=True)
@@ -325,6 +454,9 @@ class Poll(commands.Cog):
         End a quiz and publish its results using a histogram.
         It sends the histogram to the channel where the quiz resides as well as the people who started
         and ended the quiz.
+
+        Arguments:
+            - quiz name (optional, last started quiz will be used if not provided)
         """
         # If this is the case, then this was not an internal function call and it was an actual command
         if not type(ctx) == int:
@@ -336,6 +468,8 @@ class Poll(commands.Cog):
             await ctx.message.delete()
 
             quiz_name = " ".join(args) if args else self.last_started
+            if not args:
+                self.last_started = None
 
             try:
                 quiz_to_finish = self.quizzes[list(filter(lambda k: self.quizzes[k].name == quiz_name, self.quizzes))[0]]
@@ -388,14 +522,21 @@ class Poll(commands.Cog):
         # Remove the quiz from the internal dictionary
         self.quizzes.pop(quiz_to_finish.message_id)
 
+        # If this was a dynamic quiz, disable message deletion again
+        self.dynamic_quiz_active = False
+
     @commands.command("intermediate_results", aliases=("intermediateresults", "intermediate-results", "intermediate"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def quiz_intermediate_results(self,ctx, public: str = "True", quiz_name: str = None):
 
         '''
-        Function to obtain intermediate results of a quiz. Optional parameters: public (defaults to True), quiz name
-        If no quiz name is provided, the most recent quiz is used instead.
+        Function to obtain intermediate results of a quiz.
+        Arguments:
+            - public [defaults to True] (optional)
+            - quiz name (optional, last started quiz will be used if not provided)
+        Note:
+            public parameter must also be specified if a quiz name is passed as argument
         '''
 
         if not quiz_name:
@@ -455,7 +596,27 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def create_quiz(self,ctx, *args):
 
-        '''Function to create a quiz json file using either a file attachment or a json string directly'''
+        '''
+        Function to create a quiz. Two different methods available:
+        - Method 1:
+            Provide details of quiz through pre-made json file.
+
+            Arguments:
+                - json filename [used for storing the file to disk]
+            Attachments:
+                - json file containing all quiz details
+
+        - Method 2:
+            Provide details of quiz in message directly
+
+            Arguments:
+                - quiz filename [used for storing the quiz file to disk]
+                - quiz name [used for naming the quiz and manipulating it once activated]
+                - question
+                - options [options must be given in one argument, separated by semicolon (;)]
+                - correct answer (optional)
+                - timer [specified using the following syntax: timer=xx where xx is the value in seconds] (optional)
+        '''
 
         if len(args) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> No arguments were given!",
@@ -509,14 +670,14 @@ class Poll(commands.Cog):
 
         """
         Function to create and start a quiz directly without writing it to a json file. Syntax is comparable to
-        the !makequiz command with all arguments given in the message itself, no attachments. Only the filename must
-        be left out.
+        the !makequiz command with all arguments given in the message itself (method 2), no attachments.
+        The filename must be left out as this quiz is not saved to disk. See !help makequiz for details about its usage.
         """
 
         if not len(args) >= 3:
-            await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Either attach the json file to "
-                                   f"the message and provide the filename as argument or provide filename, quiz name, "
-                                   f"question, answers and, if applicable, the correct response as separate arguments.",
+            await ctx.channel.send(f"<@{ctx.author.id}> Incorrect usage of command! Provide quiz name, "
+                                   f"question, answers and, if applicable, the correct response and timer value"
+                                   f"as separate arguments.",
                                    delete_after=20)
             await ctx.message.delete()
             return
@@ -541,7 +702,7 @@ class Poll(commands.Cog):
         newquiz.name = quiz_name
         newquiz.question = question
         newquiz.options = {i+1: str(option) for i,option in enumerate(options_parsed)}
-        newquiz.votes = {i+1: [] for i in range(len(options_parsed))}
+        newquiz.votes = {i+1: set() for i in range(len(options_parsed))}
         newquiz.correct_answer = correct
         newquiz.timer = timer_value
 
@@ -600,7 +761,12 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def inspect_quiz_json(self,ctx,*args):
 
-        '''Function to send stored json file via private message to the user'''
+        '''
+        Send the specified quiz json file to the user via a direct message.
+
+        Arguments:
+            - quiz filename
+        '''
 
         filename = " ".join(args)
         filename += ".json" if ".json" not in filename else ""
@@ -621,7 +787,12 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def remove_quiz(self,ctx,*args):
 
-        '''Function to remove a stored json file'''
+        '''
+        Function to remove a stored json file.
+
+        Arguments:
+            - quiz filename
+        '''
 
         filename = " ".join(args)
         filename += ".json" if ".json" not in filename else ""
@@ -643,11 +814,10 @@ class Poll(commands.Cog):
         timer = timer_duration
         t = lambda x: f"{0 if x//60 < 10 else ''}{x // 60}:{0 if x % 60 < 10 else ''}{x % 60}{0 if x % 60 == 0 else ''}"
 
-        # Extract the embed from the message and get it's original title
-        embed = message_object.embeds[0]
 
         while timer > 0:
             new_timer_value = f"Time left: {t(timer)}"
+            embed = (await message_object.channel.fetch_message(message_object.id)).embeds[0]
             embed.set_footer(text=new_timer_value)
             await message_object.edit(embed=embed)
             await asyncio.sleep(1)

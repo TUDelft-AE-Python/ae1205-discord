@@ -528,7 +528,10 @@ class QuestionQueue(Queue):
 
     async def follow(self, ctx, idx=None):
         """ Follow a question. """
-        await ctx.message.delete()
+        try:
+            await ctx.message.delete()
+        except:
+            print('Cant delete message in follow')
         if not self.queue:
             await ctx.send('There are no questions in the queue!', delete_after=20)
             return
