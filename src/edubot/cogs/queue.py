@@ -296,8 +296,6 @@ class MultiReviewQueue(Queue):
         self.indicator = None
 
     async def add(self, ctx, uid, aid=None):
-        # print('entered add function')
-        # print(f'uid: {uid}\t aid: {aid}')
         # Delete the triggering
         try:
             await ctx.message.delete()
@@ -306,14 +304,11 @@ class MultiReviewQueue(Queue):
 
         # Find if user is already in a queue
         student = self.studentsQueued.get(uid, None)
-        # print(f'student found or not: {student}')
 
         # Use !ready to display which assignments they've handed in already
         # Parallels the use of the !follow command in the question queue
         if aid is None:
-            msg = "The following assignments are being handled: " + \
-                ', '.join(str(i) for i in self.assignments) + '\n'
-
+            msg = ""
             if student is None:
                 msg += f'<@{uid}>, you currently have not joined any queues'
             else:
@@ -328,36 +323,29 @@ class MultiReviewQueue(Queue):
             await ctx.channel.send(msg, delete_after=20)
             return
 
-        # print('student specific queue display handled')
 
         # If student doesn't yet exist, create student
         if student is None:
             student = MultiReviewQueue.Student(uid)
             self.studentsQueued[uid] = student
-        # print('created student')
 
         # Check queue exists and student not in it
         if aid in self.assignments and aid not in student.aid:
-            # print('queue exists, student adding')
             student.aid.append(aid)
             self.queue[aid].append(student.id)
             msg = f"<@{uid}>, you've been added to assignment {aid}'s queue at position {len(self.queue[aid])}"
         # Queue exists, but student already in it
         elif aid in student.aid:
-            # print('queue exists, student already in')
             pos = self.queue[aid].index(student.id)
             msg = f"Hi <@{student.id}>! For assignmen {aid}, " + \
                 (f'there are still {pos} people waiting in front of you.' if pos else
                     'you are next in line!')
         # Queue doesn't exist
         else:
-            # print('queue nonexistant')
             msg = f"Hi <@{student.id}>! We aren't reviewing that assignment yet, so you'll have to wait until we open that queue."
         await ctx.send(msg, delete_after=10)
 
     async def takenext(self, ctx, aid=None):
-        print('enter takenext')
-        print(f'aid: {aid}')
         ''' Take the next student from the queue. Optionally add the queue number'''
         # In case TAs forget to specify which queue, default to first
         # non-empty queue
@@ -366,7 +354,6 @@ class MultiReviewQueue(Queue):
             aid = next(aidIter)
             while len(self.queue[aid]) == 0:
                 aid = next(aidIter)
-        print(f'aid: {aid}')
         # Get the voice channel of the caller
         cv = getvoicechan(ctx.author)
         if cv is None:
@@ -377,14 +364,10 @@ class MultiReviewQueue(Queue):
             return
 
         # Get the next student in the queue
-        print('get uid')
         uid = self.queue[aid].pop(0)
-        print(f'uid: {uid}. Now getting member')
         member = await ctx.guild.fetch_member(uid)
-        print(f'member: {member}')
         unready = []
         while self.queue[aid] and not readymovevoice(member):
-            print(f'unready while loop entered for {uid}|{member.name}')
             await self.bot.dm(member.id, f'You were invited by a TA, but you\'re not in a voice channel yet!'
                               'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
             # Store the studentID to place them back in the queue, and get the next one to try
@@ -396,7 +379,6 @@ class MultiReviewQueue(Queue):
                 await ctx.send(f'<@{ctx.author.id}> : There\'s noone in queue {aid} who is ready (in a voice lounge)!', delete_after=10)
                 self.queue[aid] = unready
                 return
-        print('managed unready queue')
         # Placement of unready depends on the length of the queue left. Priority goes
         # to those who are ready, but doesn't send unready to the end of the queue.
         if len(self.queue[aid]) <= len(unready):
@@ -404,29 +386,24 @@ class MultiReviewQueue(Queue):
         else:
             insertPos = min(len(self.queue[aid]) // 2, 10)
             self.queue[aid] = self.queue[aid][:insertPos] + unready + self.queue[aid][insertPos:]
-        print('restored old queue, now moving student to TA')
 
         # move the student to the callee's voice channel, and store him/her
         # as assigned for the caller. First remove previous assignee from
         # all queues (assumes they passed all assignments they checked)
-        print('check and clear old student')
         prevStudent = self.assigned.get(ctx.author.id, None)
         if prevStudent:
-            print('entered prevStudent if statement')
             self.studentsQueued.pop(prevStudent.id)
             for handin in prevStudent.aid:
                 self.queue[handin].remove(prevStudent.id)
             del prevStudent.oldVC
             del prevStudent.qid
 
-        print('assign student to TA')
         newStudent = self.studentsQueued[uid]
         newStudent.oldVC = getvoicechan(member)
         newStudent.qid = self.qid # I saw in the original putback you pass qid, couldn't see what for
         self.assigned[ctx.author.id] = newStudent
         await member.edit(voice_channel=cv)
 
-        print('ping next in line')
         # are there still students in the queue?
         if self.queue[aid]:
             member = await ctx.guild.fetch_member(self.queue[aid][0])
@@ -760,10 +737,7 @@ class QueueCog(commands.Cog):
     @commands.check(lambda ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     async def queueme(self, ctx, *args):
         """ Add me to the queue in this channel. """
-        print('outer queueme command')
-        print([i for i in args])
         qid = (ctx.guild.id, ctx.channel.id)
-        print('past qid')
         if len(args)>0:
             await Queue.queues[qid].add(ctx, ctx.author.id, args[0])
         else:
