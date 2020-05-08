@@ -240,7 +240,9 @@ class Poll(commands.Cog):
         self.load_quizzes()
 
     def get_chanquizzes(self, chanid):
-        return list(filter(lambda k: self.quizzes[k].channel_id == chanid, self.quizzes))
+        ids = list(
+            filter(lambda k: self.quizzes[k].channel_id == chanid, self.quizzes))
+        return [self.quizzes[k] for k in ids]
 
     @commands.Cog.listener()
     async def on_message(self, ctx):
