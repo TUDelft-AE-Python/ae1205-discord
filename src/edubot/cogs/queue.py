@@ -903,6 +903,13 @@ class QueueCog(commands.Cog):
     @commands.check(lambda  ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     @commands.has_permissions(administrator=True)
     async def toggleReview(self, ctx, aid):
+        """Toggles whether an assignment is being handled
+
+        In a ReviewQueue this merely indicates in the Indicator if it's being accepted.
+        In a MultiReviewQueue this adds and removes queues.
+        Arguments:
+            - aid: Assignment number.
+        """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         if aid is None:
@@ -916,6 +923,11 @@ class QueueCog(commands.Cog):
     @commands.check(lambda  ctx: Queue.qcheck(ctx, 'Review'))
     @commands.has_permissions(administrator=True)
     async def convert(self, ctx, aid='1'):
+        """Function to convert from Review to MultiReview
+
+        Arguments:
+            - aid: Assignment number for first queue, if none already enabled.
+              Defaults to 1"""
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
         if Queue.queues[qid].qtype == 'Review':
