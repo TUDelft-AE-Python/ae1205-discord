@@ -314,12 +314,11 @@ class MultiReviewQueue(Queue):
             else:
                 readied = student.aid
                 plural = (True if len(readied) > 1 else False)
-                msg += f'<@{uid}>, you have joined the following queue' + \
+                msg += f'<@{uid}>, are in queue' + \
                        ('s: ' if plural else ': ') + \
-                       f'{", ".join(str(i) for i in readied)}'
-                msg += "\nYou are at positions:\n"
-                for queue in readied:
-                    msg += f"Position in queue {queue}: {self.queue[queue].index(uid)+1} of {len(self.queue[queue])}\n"
+                       f'{", ".join(str(i) for i in readied)}' + '. '
+                msg += f"You are at position{'s' if plural else ''}:"
+                msg += f'{", ".join(f"{self.queue[queue].index(uid)+1} of {len(self.queue[queue])}")}'
             await ctx.channel.send(msg, delete_after=20)
             return
 
