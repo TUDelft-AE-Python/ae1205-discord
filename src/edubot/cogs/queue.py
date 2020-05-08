@@ -293,6 +293,7 @@ class MultiReviewQueue(Queue):
         self.studentsQueued = {}
         self.assignments = []
         self.assigned = dict()
+        self.indicator = None
 
     async def add(self, ctx, uid, aid=None):
         # print('entered add function')
@@ -464,38 +465,61 @@ class MultiReviewQueue(Queue):
         '''Floating indicator displaying next in line and length of queue. Not implemented for MultiReview
 
         Not a command invoked by a user, but by changes in the queue.'''
-        # msg = f'**Length of queue:** {len(self.queue)}.\n'+ \
-        #         'Next three in queue:\n'
-        # for idx, member  in enumerate(self.queue[:3]):
-        #     msg += f'{idx+1}: <@{member}>\n'
-        # msg += '\n\nType !ready to enter the queue when you\n also want to hand in your assignment!'
-        # embed = discord.Embed(title=f"Queue for assignments {', '.join(i for i in self.assignments)}",
-        #                       description=msg, colour=0xae8b0c)
-        # # Delete previous indicator
-        # if self.indicator is not None:
-        #     await self.indicator.delete()
+        title = "Queue Tracker Widget"
+        fieldData = []
+        for i in self.assignments:
+            fieldname = f'Queue {i}'
+            fieldtext = f'**Length of queue:** {len(self.queue[i])}.\n'+ \
+                    'Next three in queue:\n'
+            for idx, member  in enumerate(self.queue[i][:3]):
+                fieldtext += f'{idx+1}: <@{member}>\n'
+            fieldData.append((fieldname, fieldtext))
+        footer = 'Type `!ready <queue number>` to enter the queue when you also want to hand in your assignment!'
 
-        # # Send new indicator
-        # self.indicator = await ctx.channel.send(embed=embed)
-        pass
+
+        if fieldData:
+            embed = discord.Embed(
+                description = "The following queues are active",
+                colour = 0xae8b0c
+            )
+            embed.set_footer(text=footer)
+
+            for ftitle, fcont in fieldData:
+                embed.add_field(name=ftitle, value=fcont, inline=True)
+        else:
+            embed = discord.Embed(
+                description = 'As soon as queues open up, you will see which you can join here',
+                colour = 0xae8b0c
+            )
+        embed.set_author(name=title)
+
+        # Delete previous indicator
+        if self.indicator is not None:
+            await self.indicator.delete()
+
+        # Send new indicator
+        self.indicator = await ctx.channel.send(embed=embed)
 
     async def startReviewing(self, ctx, aid):
-        """Not implemented in MultiReview"""
+        """Adds a queue to the list of allowed queues and updates the indicator"""
         if aid not in self.assignments:
             self.assignments.append(aid)
             self.queue[aid] = []
             self.assignments.sort()
-            # await self.updateIndicator(ctx)
-            await ctx.send(f'Added queue for assignment {aid}')
+            await self.updateIndicator(ctx)
+            await ctx.send(f'Added queue for assignment {aid}', delete_after=5)
         else:
             ctx.send(f"Assignment {aid} is already being reviewed.", delete_after=5)
 
     async def stopReviewing(self, ctx, aid):
-        """Not implemented in MultiReview"""
+        """Removes a queue, and clears it."""
         if aid in self.assignments:
+            for uid in self.queue[aid]:
+                self.studentsQueued[uid].aid.remove(aid)
+            self.queue.pop(aid)
             self.assignments.remove(aid)
-            # await self.updateIndicator(ctx)
-            await ctx.send(f'Incorrectly removed queue for assignment {aid}')
+            await self.updateIndicator(ctx)
+            await ctx.send(f'Removed queue for assignment {aid}. Queue cleared.', delete_after=5)
         else:
             ctx.send(f"Assignment {aid} was not being reviewed.", delete_after=5)
 class QuestionQueue(Queue):
