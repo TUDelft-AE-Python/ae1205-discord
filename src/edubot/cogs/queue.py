@@ -295,6 +295,27 @@ class MultiReviewQueue(Queue):
         self.assigned = dict()
         self.indicator = None
 
+    def fromfile(self, qdata):
+        self.queue = qdata['queue']
+        self.assignments = qdata['assignments']
+        students = OrderedDict()
+        for aid in self.assignments:
+            for uid in self.queue[aid]:
+                if uid in students:
+                    students[uid].aid.append(aid)
+                else:
+                    student = MultiReviewQueue.Student(uid)
+                    student.aid.append(aid)
+                    students[uid] = student
+        self.studentsQueued = students
+
+    def tofile(self):
+        qdata = {
+            'assignments':self.assignments,
+            'queue':self.queue
+        }
+        return qdata
+
     async def add(self, ctx, uid, aid=None):
         # Delete the triggering
         try:
@@ -311,15 +332,18 @@ class MultiReviewQueue(Queue):
             msg = ""
             if student is None:
                 msg += f'<@{uid}>, you currently have not joined any queues'
+                await ctx.channel.send(msg, delete_after=20)
             else:
                 readied = student.aid
                 plural = (True if len(readied) > 1 else False)
                 msg += f'<@{uid}>, are in queue' + \
                        ('s: ' if plural else ': ') + \
                        f'{", ".join(str(i) for i in readied)}' + '. '
-                msg += f"You are at position{'s' if plural else ''}:"
-                msg += f'{", ".join(f"{self.queue[queue].index(uid)+1} of {len(self.queue[queue])}")}'
-            await ctx.channel.send(msg, delete_after=20)
+                msg += f"You are at position{'s' if plural else ''}:\n"
+                for rid in readied:
+                    msg += f'{rid}: Position {self.queue[rid].index(uid)+1} of {len(self.queue[rid])}'
+                await ctx.channel.send(f'<@{uid}>, see your DMs for your queue positions.')
+                await self.bot.dm(uid, msg)
             return
 
 
