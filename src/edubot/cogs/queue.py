@@ -295,6 +295,21 @@ class MultiReviewQueue(Queue):
         self.assigned = dict()
         self.indicator = None
 
+    async def convert(self, ctx, singleQueue, aid):
+        self.indicator = singleQueue.indicator
+        self.assignments = singleQueue.assignments
+        if not self.assignments:
+            self.assignments.append(aid)
+        aid = next(iter(self.assignments))
+        self.queue[aid] = singleQueue.queue
+        for uid in singleQueue.queue:
+            student = MultiReviewQueue.Student(uid)
+            student.aid.append(aid)
+            self.studentsQueued[uid] = student
+        if self.indicator:
+            await self.updateIndicator(ctx)
+
+
     def fromfile(self, qdata):
         self.queue = qdata['queue']
         self.assignments = qdata['assignments']
@@ -896,3 +911,18 @@ class QueueCog(commands.Cog):
             await Queue.queues[qid].stopReviewing(ctx, aid)
         else:
             await Queue.queues[qid].startReviewing(ctx, aid)
+
+    @commands.command('convert')
+    @commands.check(lambda  ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.has_permissions(administrator=True)
+    async def convert(self, ctx, aid='1'):
+        qid = (ctx.guild.id, ctx.channel.id)
+        await ctx.message.delete()
+        if Queue.queues[qid].qtype == 'Review':
+            targetQType = 'MultiReview'
+        else:
+            targetQType = 'Review' # Requires ReviewQueue to have a convert method
+        oldQueue = Queue.queues[qid]
+        Queue.queues.pop(qid)
+        newQueue = Queue.makequeue(qid, targetQType, ctx.guild.name, ctx.channel.name)
+        await Queue.queues[qid].convert(ctx, oldQueue, aid)
