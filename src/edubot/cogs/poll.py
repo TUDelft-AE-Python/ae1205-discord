@@ -274,7 +274,7 @@ class Poll(commands.Cog):
         save_dict["last_started"] = self.last_started
 
         with open(self.save_filepath, 'w') as file:
-            json.dump(save_dict,file)
+            json.dump(save_dict, file, indent=4)
 
     @commands.command("savequiz",aliases=("save-quiz","save_quiz","savequizzes","save-quizzes","save_quizzes"))
     @commands.has_permissions(administrator=True)
