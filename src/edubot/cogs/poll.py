@@ -11,7 +11,6 @@ from matplotlib.ticker import PercentFormatter
 # Define a shorthand for obtaining the emoji belonging to a :emoji: string
 get_emoji = lambda em: emoji.emojize(em, use_aliases=True)
 
-
 class Quiz:
 
     """
@@ -31,6 +30,7 @@ class Quiz:
         self.correct_answer = 0
         self.options = {}
         self.timer = None
+        self.dynamic = False
 
         self.votes = {}
         self.singlevote = True
@@ -64,6 +64,7 @@ class Quiz:
             self.correct_answer = json_data.get('correct', None)
             self.votes = {i+1: set() for i in range(len(self.options))}
             self.singlevote = json_data.get('singlevote', True)
+            self.dynamic = json_data.get('dynamic', False)
 
             # When the  file is read in, the timer specified there is used as a baseline. !makequiz and !startquiz
             # Can overwrite this value
@@ -94,6 +95,7 @@ class Quiz:
             owner=self.owner,
             votes=converted_votes,
             singlevote=self.singlevote,
+            dynamic=self.dynamic,
             timer=self.timer,
             counted_votes={self.options[index]: len(self.votes[index])
                            for index in range(1, len(self.options) + 1)}
@@ -235,20 +237,18 @@ class Poll(commands.Cog):
         # This dictionary contains all the currently active quizzes
         self.quizzes = {}
         self.last_started = ''
-        self.dynamic_quiz_active = False
         self.load_quizzes()
 
+    def get_chanquizzes(self, chanid):
+        return list(filter(lambda k: self.quizzes[k].channel_id == chanid, self.quizzes))
+
     @commands.Cog.listener()
-    async def on_message(self,ctx):
+    async def on_message(self, ctx):
+        # Get quizzes for this channel
+        quizzes = self.get_chanquizzes(ctx.channel.id)
 
         # If the message is from the bot itself or there are no dynamic quizzes, don't execute this function
-        if ctx.author.id == self.bot.user.id or not self.dynamic_quiz_active:
-            return
-
-        # If the previous check has been passed, but the message is not in the dynamic quiz channel, don't continue
-        if ctx.channel.id != self.quizzes[
-            list(filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]
-        ].channel_id:
+        if not quizzes or ctx.author.id == self.bot.user.id or not quizzes[0].dynamic:
             return
 
         # If it wasn't a command, the message should still be deleted
@@ -258,7 +258,6 @@ class Poll(commands.Cog):
             return
 
     def cog_unload(self):
-
         '''Function to handle unloading of the Poll Cog'''
 
         # Save all active quizzes before shutdown
@@ -267,15 +266,10 @@ class Poll(commands.Cog):
         return super().cog_unload()
 
     def save_quizzes(self):
-
         '''Function to save a pickle object containing all the currently active quizzes'''
 
         save_dict = {message_id: self.quizzes[message_id].create_save_data() for message_id in self.quizzes}
-
         save_dict["last_started"] = self.last_started
-
-        save_dict["dynamic_active"] = self.dynamic_quiz_active
-
 
         with open(self.save_filepath, 'w') as file:
             json.dump(save_dict,file)
@@ -284,9 +278,7 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def save_quiz(self,ctx):
-
         '''Save all currently active quizzes to disk.'''
-
         await ctx.message.delete()
 
         self.save_quizzes()
@@ -304,17 +296,14 @@ class Poll(commands.Cog):
             json_data = json.load(file)
 
         self.last_started = json_data.get("last_started", None)
-        self.dynamic_quiz_active = json_data.get("dynamic_active", False)
         json_data.pop("last_started", None)
-        json_data.pop("dynamic_active", None)
 
         self.quizzes = {int(message_id): Quiz(None,None).load_from_save_data(json_data[message_id])
                         for message_id in json_data}
 
         print(f"Quiz system loaded with following parameters:\n"
               f"- Active quizzes: {len(self.quizzes)}\n"
-              f"- Last quiz started: {self.last_started}\n"
-              f"- Dynamic quiz active: {self.dynamic_quiz_active}")
+              f"- Last quiz started: {self.last_started}\n")
 
     @commands.command("quiz-status", aliases=("quizstatus", "quiz_status"))
     @commands.has_permissions(administrator=True)
@@ -325,7 +314,6 @@ class Poll(commands.Cog):
             f"""
             ** Currently active quizzes: ** {len(self.quizzes)}
             ** Last started quiz: **        {self.last_started}
-            ** Dynamic quiz active: **      {self.dynamic_quiz_active}            
             """
         embed = discord.Embed(title="Quiz system status", description=status, colour=0x25a52b)
         await ctx.message.channel.send(embed=embed, delete_after=20)
@@ -413,10 +401,10 @@ class Poll(commands.Cog):
         """
         Turns the last activated quiz into a dynamic quiz.
         """
-
-        # Turn on dynamic quiz mode
-        if self.last_started:
-            self.dynamic_quiz_active = True
+        quizzes = self.get_chanquizzes(ctx.channel.id)
+        # Turn on dynamic quiz mode: Assume there's only one active quiz in this channel
+        if quizzes:
+            quizzes[0].dynamic = True
         await ctx.message.delete()
 
     @commands.command("allow-multiple", aliases=("allowmult","allow_mult", "allow_multiple"))
@@ -427,7 +415,6 @@ class Poll(commands.Cog):
             Turns the last activated quiz in a quiz where
             multiple answers are allowed per user.
         '''
-
         await ctx.message.delete()
 
         if self.last_started:
@@ -445,41 +432,41 @@ class Poll(commands.Cog):
     @commands.command("add")
     @commands.guild_only()
     async def add_quiz_option(self, ctx, *args):
-
         """
         Add an option to a dynamic quiz.
 
         Arguments:
             - Option you want to add
         """
-
         await ctx.message.delete()
+        quizzes = self.get_chanquizzes(ctx.channel.id)
+
         # If there's no dynamic quiz active, don't continue
-        if not self.dynamic_quiz_active:
+        if not quizzes or not quizzes[0].dynamic:
             return
 
+        # Parse the new option, and select the dynamic quiz to add it to
         addition = " ".join(args)
-
-        last_quiz = self.quizzes[list(filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]]
+        dyn_quiz = quizzes[0]
 
         # That option is already in the quiz or the max amount of options has been reached
-        if len(last_quiz.options) == len(last_quiz.emoji_options):
+        if len(dyn_quiz.options) == len(dyn_quiz.emoji_options):
             return
-        options = [option.lower() for option in last_quiz.options.values()]
+        options = [option.lower() for option in dyn_quiz.options.values()]
         if addition.lower() in options:
             vote_index = options.index(addition.lower())
-            last_quiz.vote(ctx.author.id, last_quiz.emoji_options[vote_index])
+            dyn_quiz.vote(ctx.author.id, dyn_quiz.emoji_options[vote_index])
             return
 
-        current_option_length = len(last_quiz.options)
-        last_quiz.options[current_option_length + 1] = addition
-        last_quiz.votes[current_option_length + 1] = set()
+        current_option_length = len(dyn_quiz.options)
+        dyn_quiz.options[current_option_length + 1] = addition
+        dyn_quiz.votes[current_option_length + 1] = set()
 
-        last_quiz.vote(ctx.author.id, last_quiz.emoji_options[current_option_length])
+        dyn_quiz.vote(ctx.author.id, dyn_quiz.emoji_options[current_option_length])
 
         # Now generate a new quiz embed and react with the appropriate new reaction
-        title, description, emojis = last_quiz.generate_quiz_message()
-        original_message = await ctx.message.channel.fetch_message(last_quiz.message_id)
+        title, description, emojis = dyn_quiz.generate_quiz_message()
+        original_message = await ctx.message.channel.fetch_message(dyn_quiz.message_id)
         original_embed = original_message.embeds[0].to_dict()
         original_embed["description"] = description
         await original_message.edit(embed=discord.Embed().from_dict(original_embed))
@@ -562,9 +549,6 @@ class Poll(commands.Cog):
 
         # Remove the quiz from the internal dictionary
         self.quizzes.pop(quiz_to_finish.message_id)
-
-        # If this was a dynamic quiz, disable message deletion again
-        self.dynamic_quiz_active = False
 
     @commands.command("intermediate_results", aliases=("intermediateresults", "intermediate-results", "intermediate"))
     @commands.has_permissions(administrator=True)
