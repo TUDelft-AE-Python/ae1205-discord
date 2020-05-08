@@ -341,7 +341,7 @@ class MultiReviewQueue(Queue):
                        f'{", ".join(str(i) for i in readied)}' + '. '
                 msg += f"You are at position{'s' if plural else ''}:\n"
                 for rid in readied:
-                    msg += f'{rid}: Position {self.queue[rid].index(uid)+1} of {len(self.queue[rid])}'
+                    msg += f'{rid}: Position {self.queue[rid].index(uid)+1} of {len(self.queue[rid])}\n'
                 await ctx.channel.send(f'<@{uid}>, see your DMs for your queue positions.')
                 await self.bot.dm(uid, msg)
             return
@@ -366,7 +366,17 @@ class MultiReviewQueue(Queue):
         # Queue doesn't exist
         else:
             msg = f"Hi <@{student.id}>! We aren't reviewing that assignment yet, so you'll have to wait until we open that queue."
+        self.studentsQueued[uid].aid.sort()
         await ctx.send(msg, delete_after=10)
+
+    def remove(self, uid):
+        if uid in self.studentsQueued:
+            for aid in self.studentsQueued[uid].aid:
+                self.queue[aid].remove(uid)
+            self.studentsQueued.pop(uid)
+            return f'<@{uid}> removed from the queue.'
+        else:
+            return f'<@{uid}> is not in any queue!'
 
     async def takenext(self, ctx, aid=None):
         ''' Take the next student from the queue. Optionally add the queue number'''
@@ -768,7 +778,7 @@ class QueueCog(commands.Cog):
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
-    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.check(lambda ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     async def removeme(self, ctx, *args):
         """ Remove me from the queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
@@ -777,7 +787,7 @@ class QueueCog(commands.Cog):
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
-    @commands.check(lambda ctx: Queue.qcheck(ctx, 'Review'))
+    @commands.check(lambda ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     @commands.has_permissions(administrator=True)
     async def remove(self, ctx, member: discord.Member):
         """ Remove user from the queue in this channel.
