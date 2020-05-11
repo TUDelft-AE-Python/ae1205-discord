@@ -749,7 +749,7 @@ class QueueCog(commands.Cog):
         if aid:
             await Queue.queues[qid].takenext(ctx, aid)
         else:
-        await Queue.queues[qid].takenext(ctx)
+            await Queue.queues[qid].takenext(ctx)
         await Queue.queues[qid].updateIndicator(ctx)
 
     @takenext.command()
