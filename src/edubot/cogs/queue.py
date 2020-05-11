@@ -393,7 +393,7 @@ class MultiReviewQueue(Queue):
         else:
             return f'<@{uid}> is not in any queue!'
 
-    async def takenext(self, ctx, aid=None):
+    async def takenext(self, ctx, aid=None, prevAll=False):
         ''' Take the next student from the queue. Optionally add the queue number'''
         # In case TAs forget to specify which queue, default to first
         # non-empty queue
@@ -440,14 +440,19 @@ class MultiReviewQueue(Queue):
         # all queues (assumes they passed all assignments they checked)
         prevStudent = self.assigned.get(ctx.author.id, None)
         if prevStudent:
+            if prevAll:
             self.studentsQueued.pop(prevStudent.id)
             for handin in prevStudent.aid:
                 self.queue[handin].remove(prevStudent.id)
+            else:
+                self.queue[aid].remove(prevStudent.id)
+            del prevStudent.check
             del prevStudent.oldVC
             del prevStudent.qid
 
         newStudent = self.studentsQueued[uid]
         newStudent.oldVC = getvoicechan(member)
+        newStudent.check = aid
         newStudent.qid = self.qid # I saw in the original putback you pass qid, couldn't see what for
         self.assigned[ctx.author.id] = newStudent
         await member.edit(voice_channel=cv)
@@ -725,18 +730,40 @@ class QueueCog(commands.Cog):
         ''' Load all queues that were previously stored to disk. '''
         await ctx.send(Queue.loadall())
 
-    @commands.command()
+    @commands.group(invoke_without_command=True)
     @commands.check(lambda ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
     @commands.has_permissions(administrator=True)
-    async def takenext(self, ctx):
-        """ Take the next in line from the queue. """
+    async def takenext(self, ctx, aid=None):
+        """ Take the next in line from the queue.
+
+        Optional argument:
+         - aid: supply which assignment was checked for previous student.
+
+        Optional subcommand:
+         - `!takenext all` removes previous student from all queues."""
         qid = (ctx.guild.id, ctx.channel.id)
         try:
             await ctx.message.delete()
         except:
             pass
+        if aid:
+            await Queue.queues[qid].takenext(ctx, aid)
+        else:
         await Queue.queues[qid].takenext(ctx)
         await Queue.queues[qid].updateIndicator(ctx)
+
+    @takenext.command()
+    @commands.check(lambda ctx: Queue.qcheck(ctx, 'MultiReview'))
+    @commands.has_permissions(administrator=True)
+    async def all(self,ctx, aid=None):
+        qid = (ctx.guild.id, ctx.channel.id)
+        try:
+            await ctx.message.delete()
+        except:
+            pass
+        await Queue.queues[qid].takenext(ctx,aid,True)
+        await Queue.queues[qid].updateIndicator(ctx)
+
 
     @commands.command()
     @commands.check(lambda ctx: Queue.qcheck(ctx, ['Review', 'MultiReview']))
