@@ -441,7 +441,7 @@ class MultiReviewQueue(Queue):
         prevStudent = self.assigned.get(ctx.author.id, None)
         if prevStudent:
             if prevAll:
-            self.studentsQueued.pop(prevStudent.id)
+                self.studentsQueued.pop(prevStudent.id)
             for handin in prevStudent.aid:
                 self.queue[handin].remove(prevStudent.id)
             else:
