@@ -17,6 +17,8 @@
 import json
 import re
 from collections import OrderedDict
+from dataclasses import dataclass, field
+from typing import List
 
 import discord
 from discord.ext import commands
@@ -282,10 +284,10 @@ class ReviewQueue(Queue):
 class MultiReviewQueue(Queue):
     qtype = 'MultiReview'
 
+    @dataclass
     class Student:
-        def __init__(self, uid):
-            self.id = uid
-            self.aid = []
+        id: int
+        aid: List[str] = field(default_factory=list)
 
     def __init__(self, qid, guildname, channame):
         super().__init__(qid, guildname, channame)
@@ -436,16 +438,20 @@ class MultiReviewQueue(Queue):
             self.queue[aid] = self.queue[aid][:insertPos] + unready + self.queue[aid][insertPos:]
 
         # move the student to the callee's voice channel, and store him/her
-        # as assigned for the caller. First remove previous assignee from
-        # all queues (assumes they passed all assignments they checked)
+        # as assigned for the caller. First clean up prevStudent, unless it's
+        # also the current student.
         prevStudent = self.assigned.get(ctx.author.id, None)
-        if prevStudent:
+        # Ensures elif clause doesn't throw exception, and skips tree for first run
+        if prevStudent == None:
+            pass
+        elif prevStudent.id == uid: # For if previous check was in different queue
+            pass
+        else:
             if prevAll:
-                self.studentsQueued.pop(prevStudent.id)
                 for handin in prevStudent.aid:
                     self.queue[handin].remove(prevStudent.id)
-            else:
-                self.queue[aid].remove(prevStudent.id)
+                    prevStudent.aid.remove(handin)
+                self.studentsQueued.pop(prevStudent.id)
             del prevStudent.check
             del prevStudent.oldVC
             del prevStudent.qid
@@ -453,6 +459,7 @@ class MultiReviewQueue(Queue):
         newStudent = self.studentsQueued[uid]
         newStudent.oldVC = getvoicechan(member)
         newStudent.check = aid
+        newStudent.aid.remove(aid) # parallels the pop in self.queue[aid]
         newStudent.qid = self.qid # I saw in the original putback you pass qid, couldn't see what for
         self.assigned[ctx.author.id] = newStudent
         await member.edit(voice_channel=cv)
@@ -477,15 +484,15 @@ class MultiReviewQueue(Queue):
                                   '' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!')
 
     async def putback(self, ctx, pos):
-        ''' Put the student you currently have in your voice channel back in the queue. Requires assignment number'''
+        ''' Put the student you currently have in your voice channel back in the queue.'''
         student = self.assigned.get(
             ctx.author.id, None)
         if not student:
             await ctx.send(f'<@{ctx.author.id}>: You don\'t have a student assigned to you yet!', delete_after=10)
         else:
             uid = student.id
-            for handin in student.aid:
-                self.queue[handin].insert(pos, uid)
+            checking = student.check
+            self.queue[checking].insert(pos, uid)
             member = await ctx.guild.fetch_member(uid)
             if readymovevoice(member):
                 await member.edit(voice_channel=student.oldVC)
