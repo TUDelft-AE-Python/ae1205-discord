@@ -377,7 +377,7 @@ class MultiReviewQueue(Queue):
 
         if aid in self.assignments: # Queue exists?
             try: # Student in queue?
-            pos = self.queue[aid].index(student.id)
+                pos = self.queue[aid].index(student.id)
                 msg = f"Hi <@{student.id}>, you're already in queue {aid}! " + \
                     (f"There are still {pos} people waiting in front of you." if pos else
                         'You are next in line!')
