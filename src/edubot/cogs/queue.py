@@ -26,6 +26,9 @@ from discord.ext import commands
 # Generate regular expressions for raw content parsing
 re_ask = re.compile(r'(?:!ask|!question)\s*(.*)')
 
+# Generate ordinal strings for queue positions
+ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+
 
 def getvoicechan(member):
     ''' Get member's voice channel.
@@ -344,15 +347,15 @@ class MultiReviewQueue(Queue):
         }
         return qdata
 
-    async def whereis(self, ctx, uid):
+    def whereis(self, uid):
         ''' Find user with id 'uid' in queues. Returns all positions'''
         try:
             student = self.studentsQueued.get(uid)
             pos = [(aid, self.queue[aid].index(uid)) for aid in student.aid]
-            msg = f'<@{uid}>, you are in:'
-            msg += ', '.join([f"position {p} of queue {q}" for q,p in pos])
+            msg = f'<@{uid}>, you are: '
+            msg += ', '.join([f"**{ordinal(p+1)}** in Queue {q}" for q,p in pos])
             return msg
-        except ValueError:
+        except:
             return f'<@{uid}>, you do not seem to be in any queues!'
 
     async def add(self, ctx, uid, aid=None):
@@ -383,21 +386,34 @@ class MultiReviewQueue(Queue):
                         'You are next in line!')
             except ValueError:
                 self.queue[aid].append(student.id)
-                student.aid.append(aid)
+                if aid not in student.aid:
+                    student.aid.append(aid)
                 msg = f'Added <@{student.id}> to the queue at position {len(self.queue[aid])}'
         else: # Wrong queue selection
             msg = f"Hi <@{student.id}>! We aren't reviewing that assignment yet, so you'll have to wait until we open that queue."
         student.aid.sort()
         await ctx.send(msg, delete_after=10)
 
-    def remove(self, uid):
-        if uid in self.studentsQueued:
-            for aid in self.studentsQueued[uid].aid:
-                self.queue[aid].remove(uid)
-            self.studentsQueued.pop(uid)
-            return f'<@{uid}> removed from all queues.'
+    def remove(self, uid, aid=None):
+        if aid:
+            return self.removeone(uid, aid)
         else:
-            return f'<@{uid}> is not in any queue!'
+            try:
+                student = self.studentsQueued[uid]
+                for aid in student.aid:
+                    self.queue[aid].remove(uid)
+                self.studentsQueued.pop(uid)
+                return f'<@{uid}> removed from all queues.'
+            except:
+                return f'<@{uid}> is not in any queue!'
+
+    def removeone(self, uid, aid):
+        try:
+            self.queue[aid].remove(uid)
+            self.studentsQueued[uid].aid.remove(aid)
+            return f'<@{uid}> removed from queue {aid}.'
+        except ValueError:
+            return f'<@{uid}> not in queue {aid}'
 
     async def takenext(self, ctx, aid=None, prevAll=False):
         ''' Take the next student from the queue. Optionally add the queue number'''
@@ -471,11 +487,11 @@ class MultiReviewQueue(Queue):
                                   f'Your patience will soon be rewarded, {member.name}... You\'re fifth in line for the queue in <#{ctx.channel.id}>!' +
                                   '' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!')
 
-    async def cleanPrev(self, ctx):
+    def cleanPrev(self, ctx):
         try:
             prevStudent = self.assigned.get(ctx.author.id)
-            await self.remove(prevStudent.id)
-        except ValueError:
+            self.remove(prevStudent.id)
+        except:
             pass
 
     async def putback(self, ctx, pos):
@@ -488,6 +504,9 @@ class MultiReviewQueue(Queue):
             uid = student.id
             checking = student.check
             self.queue[checking].insert(pos, uid)
+            if checking not in student.aid:
+                student.aid.append(checking)
+                student.aid.sort()
             member = await ctx.guild.fetch_member(uid)
             if readymovevoice(member):
                 await member.edit(voice_channel=student.oldVC)
@@ -762,7 +781,7 @@ class QueueCog(commands.Cog):
             await ctx.message.delete()
         except:
             pass
-        await Queue.queues[qid].cleanPrev(ctx)
+        Queue.queues[qid].cleanPrev(ctx)
         await Queue.queues[qid].takenext(ctx,aid)
         await Queue.queues[qid].updateIndicator(ctx)
 
@@ -828,7 +847,10 @@ class QueueCog(commands.Cog):
         """ Remove me from the queue in this channel. """
         qid = (ctx.guild.id, ctx.channel.id)
         await ctx.message.delete()
-        await ctx.send(Queue.queues[qid].remove(ctx.author.id), delete_after=10)
+        if len(args)>0:
+            await ctx.send(Queue.queues[qid].remove(ctx.author.id, args[0]), delete_after=10)
+        else:
+            await ctx.send(Queue.queues[qid].remove(ctx.author.id), delete_after=10)
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command()
@@ -929,7 +951,7 @@ class QueueCog(commands.Cog):
             if qtype == 'MultiReview':
                 await Queue.queues[qid].add(ctx, member.id, aid)
             else:
-            await Queue.queues[qid].add(ctx, member.id)
+                await Queue.queues[qid].add(ctx, member.id)
         await Queue.queues[qid].updateIndicator(ctx)
 
     @commands.command('toggle', aliases=('toggleReview',))
