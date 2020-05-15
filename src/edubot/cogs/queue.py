@@ -27,7 +27,7 @@ from discord.ext import commands
 re_ask = re.compile(r'(?:!ask|!question)\s*(.*)')
 
 # Generate ordinal strings for queue positions
-ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
+ordinal = lambda n: f'{n}{"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4]}'
 
 
 def getvoicechan(member):
