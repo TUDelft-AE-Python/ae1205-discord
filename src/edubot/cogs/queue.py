@@ -197,7 +197,11 @@ class ReviewQueue(Queue):
             return
 
         # Get the next student in the queue
-        member = await ctx.guild.fetch_member(self.queue.pop(0))
+        uid = self.queue.pop(0)
+        try:
+            member = await ctx.guild.fetch_member(uid)
+        except:
+            member = None
         unready = []
         while self.queue and not readymovevoice(member):
             await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
@@ -205,7 +209,11 @@ class ReviewQueue(Queue):
             # Store the studentID to place them back in the queue, and get the next one to try
             unready.append(member.id)
             if self.queue:
-                member = await ctx.guild.fetch_member(self.queue.pop(0))
+                uid = self.queue.pop(0)
+                try:
+                    member = await ctx.guild.fetch_member(uid)
+                except:
+                    member = None
             else:
                 await ctx.send(f'<@{ctx.author.id}> : There\'s noone in the queue who is ready (in a voice lounge)!', delete_after=10)
                 self.queue = unready
@@ -435,7 +443,10 @@ class MultiReviewQueue(Queue):
 
         # Get the next student in the queue
         uid = self.queue[aid].pop(0)
-        member = await ctx.guild.fetch_member(uid)
+        try:
+            member = await ctx.guild.fetch_member(uid)
+        except:
+            member = None
         unready = []
         while self.queue[aid] and not readymovevoice(member):
             await self.bot.dm(member.id, f'You were invited by a TA, but you\'re not in a voice channel yet!'
@@ -444,7 +455,10 @@ class MultiReviewQueue(Queue):
             unready.append(uid)
             if self.queue[aid]:
                 uid = self.queue[aid].pop(0)
-                member = await ctx.guild.fetch_member(uid)
+                try:
+                    member = await ctx.guild.fetch_member(uid)
+                except:
+                    member = None
             else:
                 await ctx.send(f'<@{ctx.author.id}> : There\'s noone in queue {aid} who is ready (in a voice lounge)!', delete_after=10)
                 self.queue[aid] = unready
