@@ -230,7 +230,10 @@ class ReviewQueue(Queue):
         # as assigned for the caller
         self.assigned[ctx.author.id] = (
             member.id, self.qid, getvoicechan(member))
-        await member.edit(voice_channel=cv)
+        try:
+            await member.edit(voice_channel=cv, reason=f'<@{ctx.author.nick}> takes {member.nick} into {cv.name}. {len(unready)} skipped')
+        except discord.HTTPException:
+            ctx.send(f'Failed to move {member.mention}')
 
         # are there still students in the queue?
         if self.queue:
