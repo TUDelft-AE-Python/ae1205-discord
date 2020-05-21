@@ -207,7 +207,7 @@ class ReviewQueue(Queue):
             await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
                               'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
             # Store the studentID to place them back in the queue, and get the next one to try
-            unready.append(member.id)
+            unready.append(uid)
             if self.queue:
                 uid = self.queue.pop(0)
                 try:
@@ -233,7 +233,8 @@ class ReviewQueue(Queue):
         try:
             await member.edit(voice_channel=cv, reason=f'<@{ctx.author.nick}> takes {member.nick} into {cv.name}. {len(unready)} skipped')
         except discord.HTTPException:
-            ctx.send(f'Failed to move {member.mention}')
+            ctx.send(f'Failed to move {member.mention}. Putback into queue', delete_after=5)
+            await self.putback(ctx, 10)
 
         # are there still students in the queue?
         if self.queue:
@@ -483,7 +484,11 @@ class MultiReviewQueue(Queue):
         newStudent.aid.remove(aid) # parallels the pop in self.queue[aid]
         newStudent.qid = self.qid # I saw in the original putback you pass qid, couldn't see what for
         self.assigned[ctx.author.id] = newStudent
-        await member.edit(voice_channel=cv)
+        try:
+            await member.edit(voice_channel=cv)
+        except:
+            ctx.send(f"Failed to move <@{newStudent.id}> into voice channel. Putback in queue", delete_after=5)
+            await self.putback(10)
 
         # are there still students in the queue?
         if self.queue[aid]:
