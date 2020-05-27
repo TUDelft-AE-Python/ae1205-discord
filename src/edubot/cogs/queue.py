@@ -322,7 +322,7 @@ class ReviewQueue(Queue):
                 f"Assignment {aid} was not being reviewed.", delete_after=5)
 
 
-class MultiReviewQueue(ReviewQueue):
+class MultiReviewQueue(Queue):
     qtype = 'MultiReview'
 
     @dataclass
@@ -335,6 +335,7 @@ class MultiReviewQueue(ReviewQueue):
         self.queue = OrderedDict()
         self.studentsQueued = {}
         self.assigned = dict()
+        self.assignments = list()
         self.indicator = None
 
     def size(self):
@@ -600,20 +601,30 @@ class MultiReviewQueue(ReviewQueue):
         # Send new indicator
         self.indicator = await ctx.channel.send(embed=embed)
 
+
     async def startReviewing(self, ctx, aid):
         """Adds a queue to the list of allowed queues and updates the indicator"""
-        super().startReviewing(ctx, aid)
         if aid not in self.assignments:
+            self.assignments.append(aid)
             self.queue[aid] = []
+            self.assignments.sort()
+            await self.updateIndicator(ctx)
+            await ctx.send(f'Added queue for assignment {aid}', delete_after=5)
+        else:
+            ctx.send(
+                f"Assignment {aid} is already being reviewed.", delete_after=5)
 
     async def stopReviewing(self, ctx, aid):
         """Removes a queue, and clears it."""
-        super().stopReviewing(ctx, aid)
         if aid in self.assignments:
             for uid in self.queue[aid]:
                 self.studentsQueued[uid].aid.remove(aid)
             self.queue.pop(aid)
+            self.assignments.remove(aid)
+            await self.updateIndicator(ctx)
             await ctx.send(f'Removed queue for assignment {aid}. Queue cleared.', delete_after=5)
+        else:
+            ctx.send(f"Assignment {aid} was not being reviewed.", delete_after=5)
 
 
 class QuestionQueue(Queue):
