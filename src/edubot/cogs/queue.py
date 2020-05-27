@@ -781,7 +781,7 @@ class QuestionQueue(Queue):
         return f'Questions followed by <@{uid}>:\n' + '\n'.join(qlst)
 
 
-class QueueCog(commands.Cog):
+class QueueCog(commands.Cog, name='Queue'):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
