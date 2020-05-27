@@ -281,8 +281,6 @@ class Poll(commands.Cog):
     @commands.guild_only()
     async def save_quiz(self,ctx):
         '''Save all currently active quizzes to disk.'''
-        await ctx.message.delete()
-
         self.save_quizzes()
         await ctx.channel.send(f"<@{ctx.author.id}> Currently active quizzes saved!",
                                delete_after=20)
@@ -311,7 +309,6 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def get_quiz_system_status(self, ctx):
-        await ctx.message.delete()
         status = \
             f"""
             ** Currently active quizzes: ** {len(self.quizzes)}
@@ -339,9 +336,6 @@ class Poll(commands.Cog):
         quiz_channel = ctx.channel
         # Save the creator's id to privately send feedback after the quiz is finished
         quiz_creator = ctx.author.id
-
-        # Delete the message containing the command
-        await ctx.message.delete()
 
         # Add a .json extension if it is not present
         fname += ".json" if ".json" not in fname else ""
@@ -399,7 +393,6 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def make_quiz_dynamic(self,ctx):
-
         """
         Turns the last activated quiz into a dynamic quiz.
         """
@@ -407,7 +400,6 @@ class Poll(commands.Cog):
         # Turn on dynamic quiz mode: Assume there's only one active quiz in this channel
         if quizzes:
             quizzes[0].dynamic = True
-        await ctx.message.delete()
 
     @commands.command("allow-multiple", aliases=("allowmult","allow_mult", "allow_multiple"))
     @commands.has_permissions(administrator=True)
@@ -417,8 +409,6 @@ class Poll(commands.Cog):
             Turns the last activated quiz in a quiz where
             multiple answers are allowed per user.
         '''
-        await ctx.message.delete()
-
         if self.last_started:
             last_quiz = self.quizzes[list(
                 filter(lambda k: self.quizzes[k].name == self.last_started, self.quizzes))[0]]
@@ -440,7 +430,6 @@ class Poll(commands.Cog):
         Arguments:
             - Option you want to add
         """
-        await ctx.message.delete()
         quizzes = self.get_chanquizzes(ctx.channel.id)
 
         # If there's no dynamic quiz active, don't continue
@@ -493,9 +482,6 @@ class Poll(commands.Cog):
             # Save the author and channel for future reference
             author_id = ctx.author.id
             message_channel = ctx.channel
-
-            # Delete the message containing the command
-            await ctx.message.delete()
 
             quiz_name = " ".join(args) if args else self.last_started
             if not args:
@@ -556,7 +542,6 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def quiz_intermediate_results(self,ctx, public: str = "True", quiz_name: str = None):
-
         '''
         Function to obtain intermediate results of a quiz.
         Arguments:
@@ -565,13 +550,10 @@ class Poll(commands.Cog):
         Note:
             public parameter must also be specified if a quiz name is passed as argument
         '''
-
         if not quiz_name:
             quiz_name = self.last_started
 
         public = public.lower() in ("true", "yes", "1", "public")
-
-        await ctx.message.delete()
 
         try:
             quiz = self.quizzes[list(filter(lambda k: self.quizzes[k].name == quiz_name, self.quizzes))[0]]
@@ -648,7 +630,6 @@ class Poll(commands.Cog):
         if len(args) == 0:
             await ctx.channel.send(f"<@{ctx.author.id}> No arguments were given!",
                                    delete_after=20)
-            await ctx.message.delete()
             return
 
         # If a file has been attached, this means the quiz is attached in a json file format
@@ -658,7 +639,6 @@ class Poll(commands.Cog):
             file_name = " ".join(args)
             file_name += ".json" if ".json" not in file_name else ""
             await ctx.message.attachments[0].save(self.datadir.joinpath(file_name), use_cached=False, seek_begin=True)
-            await ctx.message.delete()
             return
 
         # If not, the json data must be given as an argument
@@ -667,7 +647,6 @@ class Poll(commands.Cog):
                                    f"the message and provide the filename as argument or provide filename, quiz name, "
                                    f"question, answers and, if applicable, the correct response as separate arguments.",
                                    delete_after=20)
-            await ctx.message.delete()
             return
         timer_value = ''
         # A timer value was added, which needs to be extracted now
@@ -688,8 +667,6 @@ class Poll(commands.Cog):
         with open(self.datadir.joinpath(file_name), 'w') as file:
             file.write(json_string)
 
-        await ctx.message.delete()
-
     @commands.command("directquiz", aliases=("direct-quiz", "direct_quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
@@ -706,7 +683,6 @@ class Poll(commands.Cog):
                                    f"question, answers and, if applicable, the correct response and timer value"
                                    f"as separate arguments.",
                                    delete_after=20)
-            await ctx.message.delete()
             return
 
         timer_value = None
@@ -755,13 +731,6 @@ class Poll(commands.Cog):
         if newquiz.timer:
             self.bot.loop.create_task(self.quiz_timer(newquiz.timer, new_message))
 
-
-
-        await ctx.message.delete()
-
-
-
-
     @commands.command("viewquiz", aliases=("viewquizzes", "view_quizzes", "view_quiz", "view-quizzes", "view-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
@@ -781,7 +750,6 @@ class Poll(commands.Cog):
         else:
             embed = discord.Embed(title="Quiz JSON files and active quizzes", description=to_send, colour=0x25a52b)
             await ctx.channel.send(embed=embed, delete_after=30)
-        await ctx.message.delete()
 
     @commands.command("inspectquiz", aliases=("inspect_quiz", "inspect-quiz"))
     @commands.has_permissions(administrator=True)
@@ -807,20 +775,17 @@ class Poll(commands.Cog):
                                    delete_after=20)
             await self.bot.get_user(ctx.author.id).send(f"<@{ctx.author.id}> Here is the file that you requested.",
                                                         file=discord.File(filepath))
-        await ctx.message.delete()
 
     @commands.command("delquiz", aliases=("delete-quiz", "deletequiz", "delete_quiz", "removequiz", "remove-quiz", "remove_quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def remove_quiz(self,ctx,*args):
-
         '''
         Function to remove a stored json file.
 
         Arguments:
             - quiz filename
         '''
-
         filename = " ".join(args)
         filename += ".json" if ".json" not in filename else ""
         filepath = self.datadir.joinpath(filename)
@@ -831,7 +796,6 @@ class Poll(commands.Cog):
             filepath.unlink()
             await ctx.channel.send(f"<@{ctx.author.id}> File deleted!",
                                    delete_after=20)
-        await ctx.message.delete()
 
 
     async def quiz_timer(self, timer_duration, message_object):

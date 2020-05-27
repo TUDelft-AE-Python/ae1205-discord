@@ -16,13 +16,13 @@
 # If not, see <https://www.gnu.org/licenses/>.
 
 """Contains the main :py:class:`EduBot` specification."""
-
+import sys
 from pathlib import Path
 
 import discord
 from discord.ext import commands
 
-from .cogs import Poll, QueueCog, ErrorHandler
+from .cogs import Poll, QueueCog
 
 
 class EduBot(commands.Bot):
@@ -42,11 +42,7 @@ class EduBot(commands.Bot):
             Path.mkdir(self.datadir)
         self.add_cog(QueueCog(self))
         self.add_cog(Poll(self))
-        self.add_cog(ErrorHandler(self))
 
-    async def on_ready(self):
-        """Bot initialisation upon connecting to Discord."""
-        print(f"{self.user} has connected to Discord!")
 
     async def dm(self, user, message):
         """Send a direct message to a user."""
@@ -56,3 +52,48 @@ class EduBot(commands.Bot):
             if not user.dm_channel:
                 await user.create_dm()
             await user.dm_channel.send(message)
+
+    async def on_ready(self):
+        """Bot initialisation upon connecting to Discord."""
+        print(f"{self.user} has connected to Discord!")
+
+    async def on_command(self, ctx):
+        ''' This function is triggered just before each invoked command. 
+            It is used to delete the original command message. '''
+        try:
+            await ctx.message.delete()
+        except:
+            pass
+
+    async def on_command_error(self, ctx, error):
+        ''' Parse the event triggered when an error is raised while invoking a command.
+            ctx   : Context
+            error : Exception
+        '''
+
+        if hasattr(ctx.command, 'on_error'):
+            return
+
+        # First try to clear the offending message
+        try:
+            await ctx.message.delete()
+        except:
+            pass
+
+        # Then do something with the error
+        error = getattr(error, 'original', error)
+
+        if isinstance(error, (commands.CommandNotFound, commands.UserInputError, commands.BadArgument)):
+            return await ctx.send(f'Command or argument not recognised! Did you make a typo <@{ctx.author.id}>?', delete_after=10)
+
+        elif isinstance(error, commands.DisabledCommand):
+            return await ctx.send(f'{ctx.command} has been disabled, <@{ctx.author.id}>.', delete_after=10)
+
+        elif isinstance(error, commands.NoPrivateMessage):
+            try:
+                return await ctx.author.send(f'{ctx.command} can not be used in Private Messages.')
+            except:
+                pass
+
+        print(
+            f'Ignoring exception {type(error)} in command {ctx.command}', file=sys.stderr)
