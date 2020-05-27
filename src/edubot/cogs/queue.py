@@ -322,7 +322,7 @@ class ReviewQueue(Queue):
                 f"Assignment {aid} was not being reviewed.", delete_after=5)
 
 
-class MultiReviewQueue(Queue):
+class MultiReviewQueue(ReviewQueue):
     qtype = 'MultiReview'
 
     @dataclass
@@ -335,7 +335,6 @@ class MultiReviewQueue(Queue):
         self.queue = OrderedDict()
         self.studentsQueued = {}
         self.assigned = dict()
-        self.assignments = list()
         self.indicator = None
 
     def size(self):
