@@ -177,7 +177,7 @@ class ReviewQueue(Queue):
         super().__init__(qid, guildname, channame)
         self.assigned = dict()
         self.indicator = None
-        self.assignments = []
+        self.assignments = list()
 
     async def convert(self, ctx, multiQueue, aid):
         ''' Convert a multiqueue into a single queue. '''
@@ -335,6 +335,7 @@ class MultiReviewQueue(Queue):
         self.queue = OrderedDict()
         self.studentsQueued = {}
         self.assigned = dict()
+        self.assignments = list()
         self.indicator = None
 
     def size(self):
@@ -974,9 +975,7 @@ class QueueCog(commands.Cog):
             - aid: Assignment number.
         """
         qid = (ctx.guild.id, ctx.channel.id)
-        if aid is None:
-            await ctx.send(f'Command requires an assignment number', delete_after=5)
-        elif aid in Queue.queues[qid].assignments:
+        if aid in Queue.queues[qid].assignments:
             await Queue.queues[qid].stopReviewing(ctx, aid)
         else:
             await Queue.queues[qid].startReviewing(ctx, aid)
