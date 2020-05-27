@@ -185,15 +185,24 @@ class ReviewQueue(Queue):
             return
 
         # Get the next student in the queue
-        member = await ctx.guild.fetch_member(self.queue.pop(0))
+        uid = self.queue.pop(0)
+        try:
+            member = await ctx.guild.fetch_member(uid)
+        except:
+            member = None
         unready = []
         while self.queue and not readymovevoice(member):
-            await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
-                              'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
+            if member is not None:
+                await self.bot.dm(member, f'You were invited by a TA, but you\'re not in a voice channel yet!'
+                                'You will be placed back in the queue. Make sure that you\'re more prepared next time!')
             # Store the studentID to place them back in the queue, and get the next one to try
-            unready.append(member.id)
+            unready.append(uid)
             if self.queue:
-                member = await ctx.guild.fetch_member(self.queue.pop(0))
+                uid = self.queue.pop(0)
+                try:
+                    member = await ctx.guild.fetch_member(uid)
+                except:
+                    member = None
             else:
                 await ctx.send(f'<@{ctx.author.id}> : There\'s noone in the queue who is ready (in a voice lounge)!', delete_after=10)
                 self.queue = unready
@@ -211,26 +220,42 @@ class ReviewQueue(Queue):
         # as assigned for the caller
         self.assigned[ctx.author.id] = (
             member.id, self.qid, getvoicechan(member))
-        await member.edit(voice_channel=cv)
+        try:
+            await member.edit(voice_channel=cv, reason=f'<@{ctx.author.nick}> takes {member.nick} into {cv.name}. {len(unready)} skipped')
+        except discord.HTTPException:
+            ctx.send(
+                f'Failed to move {member.mention}. Putback into queue', delete_after=5)
+            await self.putback(ctx, 10)
 
         # are there still students in the queue?
         if self.queue:
-            member = await ctx.guild.fetch_member(self.queue[0])
-            await self.bot.dm(member,
-                              f'Get ready! You\'re next in line for the queue in <#{ctx.channel.id}>!' +
-                              ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+            try:
+                member = await ctx.guild.fetch_member(self.queue[0])
+                await self.bot.dm(member,
+                                  f'Get ready! You\'re next in line for the queue in <#{ctx.channel.id}>!' +
+                                  ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+            except:
+                pass
+
             if len(self.queue) > 1:
                 # Also send a message to the third person in the queue
-                member = await ctx.guild.fetch_member(self.queue[1])
-                await self.bot.dm(member,
-                                  f'Almost there {member.name}, You\'re second in line for the queue in <#{ctx.channel.id}>!' +
-                                  ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+                try:
+                    member = await ctx.guild.fetch_member(self.queue[1])
+                    await self.bot.dm(member,
+                                    f'Almost there {member.name}, You\'re second in line for the queue in <#{ctx.channel.id}>!' +
+                                    ('' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!'))
+                except:
+                    pass
+
             if len(self.queue) > 5:
                 # Also send a message to the fifth person in the queue
-                member = await ctx.guild.fetch_member(self.queue[4])
-                await self.bot.dm(member,
-                                  f'Your patience will soon be rewarded, {member.name}... You\'re fifth in line for the queue in <#{ctx.channel.id}>!' +
-                                  '' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!')
+                try:
+                    member = await ctx.guild.fetch_member(self.queue[4])
+                    await self.bot.dm(member,
+                                    f'Your patience will soon be rewarded, {member.name}... You\'re fifth in line for the queue in <#{ctx.channel.id}>!' +
+                                    '' if getvoicechan(member) else ' Please join a general voice channel so you can be moved!')
+                except:
+                    pass
 
     async def putback(self, ctx, pos):
         ''' Put the student you currently have in your voice channel back in the queue. '''
@@ -240,10 +265,13 @@ class ReviewQueue(Queue):
             await ctx.send(f'<@{ctx.author.id}>: You don\'t have a student assigned to you yet!', delete_after=10)
         else:
             self.queue.insert(pos, uid)
-            member = await ctx.guild.fetch_member(uid)
-            if readymovevoice(member):
-                await member.edit(voice_channel=voicechan)
-            await self.bot.dm(member, 'You were moved back into the queue, probably because you didn\'t respond.')
+            try:
+                member = await ctx.guild.fetch_member(uid)
+                if readymovevoice(member):
+                    await member.edit(voice_channel=voicechan)
+                await self.bot.dm(member, 'You were moved back into the queue, probably because you didn\'t respond.')
+            except:
+                pass
 
     async def updateIndicator(self, ctx):
         '''Floating indicator displaying next in line and length of queue.
