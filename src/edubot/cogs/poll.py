@@ -735,6 +735,9 @@ class Poll(commands.Cog):
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def create_direct_yes_no(self, ctx):
+        """
+        Creates a direct yes or no poll in the channel where the command was issued.
+        """
         await ctx.message.delete()
         new_quiz = Quiz(None, ctx.author.id)
         new_quiz.name = "Yes-no question"
