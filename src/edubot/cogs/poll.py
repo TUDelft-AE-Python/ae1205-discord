@@ -731,6 +731,33 @@ class Poll(commands.Cog):
         if newquiz.timer:
             self.bot.loop.create_task(self.quiz_timer(newquiz.timer, new_message))
 
+    @commands.command("yesno", aliases=("yes_no", "yes-no"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def create_direct_yes_no(self, ctx):
+        await ctx.message.delete()
+        new_quiz = Quiz(None, ctx.author.id)
+        new_quiz.name = "Yes-no question"
+        new_quiz.question = "Yes or no?"
+        new_quiz.options = {i + 1: str(option) for i, option in enumerate(("Yes", "No"))}
+        new_quiz.votes = {i + 1: set() for i in range(2)}
+
+        new_quiz.emoji_options[0:2] = [get_emoji(em) for em in ("\N{REGIONAL INDICATOR SYMBOL LETTER Y}",
+                                                                "\N{REGIONAL INDICATOR SYMBOL LETTER N}")]
+        title, description, emojis = new_quiz.generate_quiz_message()
+        embed = discord.Embed(title=title, description=description, colour=0x3939cf)
+        new_message = await ctx.channel.send(embed=embed)
+
+        new_quiz.message_id = new_message.id
+        new_quiz.channel_id = new_message.channel.id
+
+        self.quizzes[new_quiz.message_id] = new_quiz
+        self.last_started = new_quiz.name
+
+        # Add the appropriate reactions
+        for em in emojis:
+            await new_message.add_reaction(em)
+
     @commands.command("viewquiz", aliases=("viewquizzes", "view_quizzes", "view_quiz", "view-quizzes", "view-quiz"))
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
