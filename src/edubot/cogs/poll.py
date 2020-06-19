@@ -37,7 +37,7 @@ class Quiz:
 
         self.emoji_options = [get_emoji(em) for em in
                               (":one:",":two:",":three:",":four:",":five:",":six:",":seven:",":eight:",":nine:",
-                               ":keycap_ten:", "\N{REGIONAL INDICATOR SYMBOL LETTER A}",
+                               "🔟", "\N{REGIONAL INDICATOR SYMBOL LETTER A}",
                                "\N{REGIONAL INDICATOR SYMBOL LETTER B}", "\N{REGIONAL INDICATOR SYMBOL LETTER C}",
                                "\N{REGIONAL INDICATOR SYMBOL LETTER D}", "\N{REGIONAL INDICATOR SYMBOL LETTER E}",
                                "\N{REGIONAL INDICATOR SYMBOL LETTER F}", "\N{REGIONAL INDICATOR SYMBOL LETTER G}",
@@ -136,7 +136,7 @@ class Quiz:
         answer_options = "\n".join([f"{self.emoji_options[i]} ) {self.options[option]}"
                                     for i,option in enumerate(self.options)])
 
-        informational_text = "Answer with the emoji's given below." + \
+        informational_text = "Answer with the emoji's given below. " + \
             ("Only your final answer counts!" if self.singlevote else "You can select multiple answers.")
 
         description = "\n\n".join([question, answer_options, informational_text])
@@ -250,7 +250,8 @@ class Poll(commands.Cog):
         quizzes = self.get_chanquizzes(ctx.channel.id)
 
         # If the message is from the bot itself or there are no dynamic quizzes, don't execute this function
-        if not quizzes or ctx.author.id == self.bot.user.id or not quizzes[0].dynamic:
+        if not quizzes or ctx.author.id == self.bot.user.id or not quizzes[0].dynamic \
+            or ctx.author.guild_permissions.administrator:
             return
 
         # If it wasn't a command, the message should still be deleted
@@ -595,7 +596,10 @@ class Poll(commands.Cog):
         reaction_channel = self.bot.get_channel(ctx.channel_id)
         reaction_message = await reaction_channel.fetch_message(message_id)
         reaction_member = reaction_channel.guild.get_member(ctx.user_id)
-        await reaction_message.remove_reaction(ctx.emoji, reaction_member)
+
+        # If it's not an administrator, we remove it without exception. If it is an administrator, do not remove it.
+        if not reaction_member.guild_permissions.administrator:
+            await reaction_message.remove_reaction(ctx.emoji, reaction_member)
 
         # Call the vote command. If an invalid emoji has been used, this will do nothing
         self.quizzes[message_id].vote(reaction_member.id, str(ctx.emoji))
@@ -730,6 +734,36 @@ class Poll(commands.Cog):
         # If the quiz has a timer, activate it
         if newquiz.timer:
             self.bot.loop.create_task(self.quiz_timer(newquiz.timer, new_message))
+
+    @commands.command("yesno", aliases=("yes_no", "yes-no"))
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def create_direct_yes_no(self, ctx):
+        """
+        Creates a direct yes or no poll in the channel where the command was issued.
+        """
+        await ctx.message.delete()
+        new_quiz = Quiz(None, ctx.author.id)
+        new_quiz.name = "Yes-no question"
+        new_quiz.question = "Yes or no?"
+        new_quiz.options = {i + 1: str(option) for i, option in enumerate(("Yes", "No"))}
+        new_quiz.votes = {i + 1: set() for i in range(2)}
+
+        new_quiz.emoji_options[0:2] = [get_emoji(em) for em in ("\N{REGIONAL INDICATOR SYMBOL LETTER Y}",
+                                                                "\N{REGIONAL INDICATOR SYMBOL LETTER N}")]
+        title, description, emojis = new_quiz.generate_quiz_message()
+        embed = discord.Embed(title=title, description=description, colour=0x3939cf)
+        new_message = await ctx.channel.send(embed=embed)
+
+        new_quiz.message_id = new_message.id
+        new_quiz.channel_id = new_message.channel.id
+
+        self.quizzes[new_quiz.message_id] = new_quiz
+        self.last_started = new_quiz.name
+
+        # Add the appropriate reactions
+        for em in emojis:
+            await new_message.add_reaction(em)
 
     @commands.command("viewquiz", aliases=("viewquizzes", "view_quizzes", "view_quiz", "view-quizzes", "view-quiz"))
     @commands.has_permissions(administrator=True)
